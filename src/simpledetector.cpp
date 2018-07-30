@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
   MarkerDetector *markerDetector = MarkerDetectorFactory::makeMarkerDetector(config);
   
   // Image
-  Mat raw = imread("../target/test.png", CV_LOAD_IMAGE_GRAYSCALE);
+  Mat raw = imread("../target/target2.png", CV_LOAD_IMAGE_GRAYSCALE);
 
   // --- real detection proces starts here
   shared_ptr<Target> target;

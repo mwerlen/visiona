@@ -1,7 +1,3 @@
-build/
-
-.settings/
-.metadata/
-.cproject
-.project
-
+/target/*.aux
+/target/*.log
+/build
