@@ -19,8 +19,9 @@ target_link_libraries(visiona config++ opencv_core opencv_calib3d opencv_highgui
 ## batchdetector
 
 add_executable(batchdetector src/batchdetector.cpp)
-
 target_link_libraries(batchdetector visiona)
+add_executable(simpledetector src/simpledetector.cpp)
+target_link_libraries(simpledetector visiona)
 
 ## install
 
