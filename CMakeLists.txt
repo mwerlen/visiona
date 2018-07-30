@@ -12,7 +12,7 @@ include_directories(include)
 
 set(CMAKE_CXX_FLAGS "-std=c++11 -g -o3 ${OTHERS_DEFINE}")
 
-add_library(visiona SHARED src/Visiona.cpp src/DebugPlotConfig.cpp src/MarkerDetector_impl.cpp src/MarkerDetectorConfig.cpp src/Timer.cpp)
+add_library(visiona SHARED src/Visiona.cpp src/MarkerDetector_impl.cpp src/MarkerDetectorConfig.cpp)
 
 target_link_libraries(visiona config++ opencv_core opencv_calib3d opencv_highgui opencv_imgproc)
 
@@ -20,6 +20,7 @@ target_link_libraries(visiona config++ opencv_core opencv_calib3d opencv_highgui
 
 add_executable(batchdetector src/batchdetector.cpp)
 target_link_libraries(batchdetector visiona)
+
 add_executable(simpledetector src/simpledetector.cpp)
 target_link_libraries(simpledetector visiona)
 
@@ -28,5 +29,4 @@ target_link_libraries(simpledetector visiona)
 install(TARGETS visiona DESTINATION lib)
 
 install(FILES include/Visiona.h DESTINATION include)
-install(FILES include/DebugPlotConfig.h DESTINATION include)
 install(FILES include/MarkerDetectorConfig.h DESTINATION include)

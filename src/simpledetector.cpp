@@ -18,7 +18,6 @@
 #include <libconfig.h++>
 
 #include "Visiona.h"
-#include "Timer.h"
 
 using namespace std;
 using namespace cv;
@@ -46,14 +45,18 @@ int main(int argc, char *argv[]) {
   if (target->detected) {
     markerDetector->evaluateExposure(raw, target);
     markerDetector->measureRough(raw, target);
+    cout << "Target (roughly):" << endl;
+    cout << "center x:" << fixed << setprecision(6) << target->outer.center.x << " ";
+    cout << "- y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
+
     markerDetector->measure(raw, target);
+    cout << "Target:" << endl;
+    cout << "center x:" << fixed << setprecision(6) << target->outer.center.x << " ";
+    cout << "- y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
+
   }
 
   // --- where output is produced
-
-  cout << "Target:" << endl;
-  cout << "center x:" << fixed << setprecision(6) << target->outer.center.x << " ";
-  cout << "- y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
 
 
   if (target->roughlyMeasured) {

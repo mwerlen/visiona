@@ -48,7 +48,6 @@
 #include <libconfig.h++>
 
 #include "Visiona.h"
-#include "Timer.h"
 
 using namespace std;
 using namespace cv;
@@ -102,7 +101,6 @@ int main(int argc, char *argv[]) {
       { "only-frame", required_argument, 0, 'o' },
       { "wait", no_argument, 0, 'w' },
       { "config", required_argument, 0, 'c' },
-      { "debug", no_argument, 0, 'd' },
       { "prefix", required_argument, 0, 'f' },
       { "skip-detection", required_argument, 0, 'k' },
       { 0, 0, 0, 0 }
@@ -285,35 +283,6 @@ int main(int argc, char *argv[]) {
 
     Mat raw = imread(imgName, CV_LOAD_IMAGE_GRAYSCALE);
 
-    DebugPlotConfig *dbg = NULL;
-
-    if (optionflag & OPTDEBUG) {
-      dbg = new DebugPlotConfig;
-      dbg->rawImage = raw;
-
-      namedWindow("Debug", CV_GUI_EXPANDED);
-      dbg->windowName = "Debug";
-
-      dbg->blitSubRegion = true;
-      dbg->blitRegionWidthMultiplier = 3.0;
-
-      dbg->enabled = true;
-      dbg->enableCirclesClusters = false;
-      dbg->enableSelectedTargets = false;
-      dbg->enableEsposure = false;
-      dbg->enableRoughMeasure = false;
-      dbg->enableSubPixelEllipses = true;
-
-      dbg->frameNumber = it->frameNumber;
-      dbg->writeContours = true;
-      dbg->writeSubpixelContours = true;
-      dbg->debugFilesPath = "contours";
-    }
-
-    if (optionflag & OPTDEBUG) {
-      tic();
-    }
-
     // --- real detection proces starts here
 
     shared_ptr<Target> tg;
@@ -321,30 +290,19 @@ int main(int argc, char *argv[]) {
     if (optionflag & OPTSKIPDETECTION) {
       tg = tgfromcfg;
     } else {
-      vector<shared_ptr<Target>> ret = d->detect(raw, dbg);
+      vector<shared_ptr<Target>> ret = d->detect(raw);
       tg = ret[0];
     }
 
     if (tg->detected) {
-      d->evaluateExposure(raw, tg, dbg);
+      d->evaluateExposure(raw, tg);
 
-      d->measureRough(raw, tg, dbg);
+      d->measureRough(raw, tg);
 
-      d->measure(raw, tg, dbg);
+      d->measure(raw, tg);
     }
 
     // --- and ends here
-
-    if (optionflag & OPTDEBUG) {
-      dbg->tstats.tTotal = toc();
-
-      stringstream fname;
-      fname << "debug/dbg_" << setfill('0') << setw(6)
-          << dbg->frameNumber << ".jpg";
-      imwrite(fname.str(), dbg->dbgImage);
-
-      waitKey((optionflag & OPTWAITKEYPRESS) ? 0 : 1);
-    }
 
     // --- where output is produced
 
@@ -371,7 +329,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    delete dbg;
   }
 
   return 0;

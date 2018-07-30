@@ -33,6 +33,9 @@
  *
  *  Created on: Apr 21, 2016
  *      Author: Davide A. Cucci (davide.cucci@epfl.ch)
+ *
+ *  Modified on: Aug 30, 2018
+ *      By : Maxime Werlen
  */
 
 #include "Visiona.h"
@@ -43,20 +46,27 @@
 
 namespace visiona {
 
-Circle::Circle(const Contour& cnt_in, const cv::Point2f &center_in, float r_in) :
-    cnt(cnt_in), center(center_in), r(r_in) {
-}
+  Circle::Circle(const Contour& cnt_in, const cv::Point2f &center_in, float r_in) :
+    cnt(cnt_in), 
+    center(center_in), 
+    r(r_in) {
+  }
 
-Circle::Circle() : center(0,0), r(0) {
-}
+  Circle::Circle() : 
+    center(0,0), 
+    r(0) {
+  }
 
-Target::Target() :
-    detected(false), roughlyMeasured(false), measured(false), white(255), black(
-        0), meanReprojectionError(std::numeric_limits<float>::infinity()) {
-}
+  Target::Target() :
+    detected(false), 
+    roughlyMeasured(false), 
+    measured(false), 
+    white(255), 
+    black(0), 
+    meanReprojectionError(std::numeric_limits<float>::infinity()) {
+  }
 
-MarkerDetector *MarkerDetectorFactory::makeMarkerDetector(
-    const MarkerDetectorConfig &cfg) {
+MarkerDetector *MarkerDetectorFactory::makeMarkerDetector(const MarkerDetectorConfig &cfg) {
   return new MarkerDetector_impl(cfg);
 }
 

@@ -33,6 +33,9 @@
  *
  *  Created on: Mar 20, 2015
  *      Author: Davide A. Cucci (davide.cucci@epfl.ch)
+ *
+ *  Modified on: Aug 30, 2018
+ *      By : Maxime Werlen
  */
 
 #include "MarkerDetectorConfig.h"
@@ -45,7 +48,7 @@ using namespace libconfig;
 namespace visiona {
 
 MarkerDetectorConfig::MarkerDetectorConfig() :
-    K(3, 3, CV_64FC1, cv::Scalar(0)), distortion(5, 1, CV_64FC1, cv::Scalar(0)) {
+  K(3, 3, CV_64FC1, cv::Scalar(0)), distortion(5, 1, CV_64FC1, cv::Scalar(0)) {
 
   CannyBlurKernelSize = 3;
   CannyLowerThreshold = 15;
@@ -54,73 +57,6 @@ MarkerDetectorConfig::MarkerDetectorConfig() :
   contourFilterMinSize = 17;
 
   markerxCorrThreshold = 0.70;
-
-  /* -------------- marker used in MOIA --------------
-
-   markerDiameter = 0.9;
-   markerInnerDiameter = 0.45;
-
-   markerSignalNFlips = 8;
-
-   markerSignalModel[0] = 0.031884;
-   markerSignalModel[1] = 0.087561;
-   markerSignalModel[2] = 0.151329;
-   markerSignalModel[3] = 0.184782;
-   markerSignalModel[4] = 0.248551;
-   markerSignalModel[5] = 0.468116;
-   markerSignalModel[6] = 0.531884;
-   markerSignalModel[7] = 0.968116;
-
-   markerSignalRadiusPercentage = 0.714286;
-
-   markerSignalStartsWith = 1.0;
-
-   //*/
-
-  /* -------------- marker for the lab tests, inner --
-
-   markerDiameter = 0.05;
-   markerInnerDiameter = 0.02;
-
-   markerSignalNFlips = 10;
-
-   markerSignalModel[0] = 0.015922;
-   markerSignalModel[1] = 0.150745;
-   markerSignalModel[2] = 0.182589;
-   markerSignalModel[3] = 0.359078;
-   markerSignalModel[4] = 0.390922;
-   markerSignalModel[5] = 0.584078;
-   markerSignalModel[6] = 0.615922;
-   markerSignalModel[7] = 0.884078;
-   markerSignalModel[8] = 0.915922;
-   markerSignalModel[9] = 0.984078;
-
-   markerSignalRadiusPercentage = 0.70;
-
-   markerSignalStartsWith = 1.0;
-   //*/
-
-  /* -------------- marker for the lab tests, outer --
-  markerDiameter = 0.25;
-  markerInnerDiameter = 0.1;
-
-  markerSignalNFlips = 10;
-
-  markerSignalModel[0] = 0.015922;
-  markerSignalModel[1] = 0.067411;
-  markerSignalModel[2] = 0.099255;
-  markerSignalModel[3] = 0.317411;
-  markerSignalModel[4] = 0.349255;
-  markerSignalModel[5] = 0.609078;
-  markerSignalModel[6] = 0.640922;
-  markerSignalModel[7] = 0.734078;
-  markerSignalModel[8] = 0.765922;
-  markerSignalModel[9] = 0.984078;
-
-  markerSignalRadiusPercentage = 0.70;
-
-  markerSignalStartsWith = 1.0;
-  //*/
 
 }
 

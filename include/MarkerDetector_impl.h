@@ -70,129 +70,91 @@ class MarkerDetector_impl: public MarkerDetector {
     MarkerDetector_impl(const MarkerDetectorConfig &cfg);
 
     // TODO: remove this wrapper method
-    inline std::vector<std::shared_ptr<Target>> detect(const cv::Mat &raw,
-        DebugPlotConfig *dbg = NULL) {
+    inline std::vector<std::shared_ptr<Target>> detect(const cv::Mat &raw) {
       std::shared_ptr<Target> tg(new Target);
       std::vector<std::shared_ptr<Target>> ret;
       ret.push_back(tg);
 
-      tg->detected = detect(raw, tg->outer, tg->inner, tg->heading, dbg);
+      tg->detected = detect(raw, tg->outer, tg->inner, tg->heading);
 
       return ret;
     }
 
-    bool detect(const cv::Mat &raw, Circle &outer, Circle &inner,
-        float &heading, DebugPlotConfig *dbg = NULL);
+    bool detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading);
 
-    bool measure(const cv::Mat &image, std::shared_ptr<Target> tg,
-        DebugPlotConfig *dbg = NULL);
+    bool measure(const cv::Mat &image, std::shared_ptr<Target> tg);
 
-    inline bool measureRough(const cv::Mat &image, std::shared_ptr<Target> tg,
-        DebugPlotConfig *dbg = NULL);
+    inline bool measureRough(const cv::Mat &image, std::shared_ptr<Target> tg);
 
     // TODO: remove this wrapper method
-    void evaluateExposure(const cv::Mat &image, std::shared_ptr<Target> tg,
-        DebugPlotConfig *dbg = NULL) {
-      evaluateExposure(image, tg->outer, tg->heading, tg->black, tg->white,
-          dbg);
+    void evaluateExposure(const cv::Mat &image, std::shared_ptr<Target> tg) {
+      evaluateExposure(image, tg->outer, tg->heading, tg->black, tg->white);
     }
 
-    void evaluateExposure(const cv::Mat &raw, const Circle &outer,
-        float heading, float &black, float &white, DebugPlotConfig *dbg = NULL);
+    void evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white);
 
-    void detectEdges(const cv::Mat &raw, cv::Mat &edges, DebugPlotConfig *dbg =
-    NULL);
+    void detectEdges(const cv::Mat &raw, cv::Mat &edges);
 
-    void parallelThreshold(const cv::Mat &raw, cv::Mat &edges, int nThreads,
-        DebugPlotConfig *dbg = NULL);
+    void parallelThreshold(const cv::Mat &raw, cv::Mat &edges, int nThreads);
 
-    void detectContours(const cv::Mat &edges, Contours &out,
-        DebugPlotConfig *dbg = NULL);
+    void detectContours(const cv::Mat &edges, Contours &out);
 
-    void filterContours(const Contours &in, Circles &out, DebugPlotConfig *dbg =
-    NULL);
+    void filterContours(const Contours &in, Circles &out);
 
-    void clusterCircles(const Circles &in, std::vector<CircleCluster> &out,
-        DebugPlotConfig *dbg = NULL);
+    void clusterCircles(const Circles &in, std::vector<CircleCluster> &out);
 
-    bool selectMarker(const cv::Mat &image, const Circles &in,
-        const std::vector<int> &ids, int &mId, float &theta,
-        DebugPlotConfig *dbg = NULL);
+    bool selectMarker(const cv::Mat &image, const Circles &in, const std::vector<int> &ids, int &mId, float &theta);
 
-    bool findConcentricCircles(const Circles &circles,
-        const CircleCluster &cluster, int &innerCircle, DebugPlotConfig *dbg =
-        NULL);
+    bool findConcentricCircles(const Circles &circles, const CircleCluster &cluster, int &innerCircle);
 
-    void fitEllipse(const Contour &cnt, Ellipse &e,
-        DebugPlotConfig *dbg = NULL);
+    void fitEllipse(const Contour &cnt, Ellipse &e);
 
-    void getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q,
-        DebugPlotConfig *dbg = NULL);
+    void getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q);
 
     void getEllipsePolynomialCoeff(const Ellipse &in, EllipsePoly &out);
 
-    void getEllipseLineIntersections(const EllipsePoly &in, double x0,
-        double y0, double theta, cv::Point2d &p1, cv::Point2d &p2);
+    void getEllipseLineIntersections(const EllipsePoly &in, double x0, double y0, double theta, cv::Point2d &p1, cv::Point2d &p2);
 
-    void getDistanceGivenCenter(const EllipsePoly& elps, const cv::Point2d& c,
-        double r, double &mu, double &std, int N);
+    void getDistanceGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &mu, double &std, int N);
 
-    void getPoseGivenCenter(const EllipsePoly& elps, const cv::Point2d& c,
-        double r, double &d, double &phi, double &kappa, DebugPlotConfig *dbg =
-        NULL);
+    void getPoseGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &d, double &phi, double &kappa);
 
-    void getDistanceWithGradientDescent(const EllipsePoly &outer,
-        const EllipsePoly &inner, const cv::Point2d x0, double step,
-        double lambda, cv::Point2d &xend, double tolX, double tolFun);
+    void getDistanceWithGradientDescent(const EllipsePoly &outer, const EllipsePoly &inner, const cv::Point2d x0, double step, 
+                                        double lambda, cv::Point2d &xend, double tolX, double tolFun);
 
-    double evalDistanceF(const EllipsePoly &outer, const EllipsePoly &inner,
-        const cv::Point2d &x, const cv::Point2d &x0);
+    double evalDistanceF(const EllipsePoly &outer, const EllipsePoly &inner, const cv::Point2d &x, const cv::Point2d &x0);
 
-    void getProjectedCircleCenter(const Circles &in, cv::Point2f &projCenter,
-        DebugPlotConfig *dbg = NULL);
+    void getProjectedCircleCenter(const Circles &in, cv::Point2f &projCenter);
 
-    void buildCircleHolesImage(const EllipsePoly &elps, const cv::Point2f &c,
-        double d, const std::string &fname, int N, float dx);
+    void buildCircleHolesImage(const EllipsePoly &elps, const cv::Point2f &c, double d, const std::string &fname, int N, float dx);
 
   protected:
-    void subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps,
-        const EllipsePoly &poly, float theta, float a, float b,
-        cv::Point2f &edge, int N = 2, DebugPlotConfig *dbg =
-        NULL);
+    void subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps, const EllipsePoly &poly, float theta, 
+                                      float a, float b, cv::Point2f &edge, int N = 2);
 
-    void refineEllipseCntWithSubpixelEdges(const cv::Mat &image,
-        const Target &tg, const Ellipse &elps,
-        bool ignoreSignalAreas, int N, std::vector<cv::Point2f> &cnt,
-        std::vector<double> &angles,
-        DebugPlotConfig *dbg = NULL);
+    void refineEllipseCntWithSubpixelEdges(const cv::Mat &image, const Target &tg, const Ellipse &elps, bool ignoreSignalAreas, int N, 
+                                            std::vector<cv::Point2f> &cnt, std::vector<double> &angles);
 
-    void getSignalInsideCircle(const cv::Mat &image, const Circle &circle,
-        float radiusPercentage, std::vector<float> &signal);
+    void getSignalInsideCircle(const cv::Mat &image, const Circle &circle, float radiusPercentage, std::vector<float> &signal);
 
-    void getSignalInsideEllipse(const cv::Mat &image, const Ellipse &ellipse,
-        float radiusPercentage, std::vector<float> &signal, float &increment,
-        float thetasmall = -M_PI, float thetabig = M_PI,
-        std::vector<cv::Point2f> *pts = NULL);
+    void getSignalInsideEllipse(const cv::Mat &image, const Ellipse &ellipse, float radiusPercentage, std::vector<float> &signal, float &increment,
+                                float thetasmall = -M_PI, float thetabig = M_PI, std::vector<cv::Point2f> *pts = NULL);
 
     void normalizeSignal(std::vector<float> &signal);
 
     void computeNormalizedxCorr(const std::vector<float> &signal, cv::Mat &out);
 
-    cv::Point2f evalEllipse(float at, const cv::Point2f &c, float a, float b,
-        float phi);
+    cv::Point2f evalEllipse(float at, const cv::Point2f &c, float a, float b, float phi);
 
-    void initColorPlotSurfacte(cv::Mat &in, const DebugPlotConfig *dbg) const;
+    void initColorPlotSurfacte(cv::Mat &in) const;
 
-    void initZoomedSubregionSurface(cv::Point2i center, float r, cv::Mat &in,
-        cv::Mat &out, int size, float &ratio, cv::Point2i &basept);
+    void initZoomedSubregionSurface(cv::Point2i center, float r, cv::Mat &in, cv::Mat &out, int size, float &ratio, cv::Point2i &basept);
 
-    inline cv::Point2i transformPoint(const cv::Point2f &in,
-        const cv::Point2i &basept, float ratio) {
+    inline cv::Point2i transformPoint(const cv::Point2f &in, const cv::Point2i &basept, float ratio) {
       return (in + cv::Point2f(-basept.x + 0.5, -basept.y + 0.5)) * ratio;
     }
 
-    inline Ellipse transofrmEllipse(const Ellipse &in,
-        cv::Point2i &basept, float ratio) {
+    inline Ellipse transofrmEllipse(const Ellipse &in, cv::Point2i &basept, float ratio) {
       Ellipse out;
       out.angle = in.angle;
       out.size = in.size * ratio;
@@ -209,12 +171,10 @@ class MarkerDetector_impl: public MarkerDetector {
 
     cv::Point2f distort(const cv::Point2f &p);
 
-    void drawCube(cv::Mat &image, const cv::Mat &R, const cv::Mat &t,
-        const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255),
-        const cv::Point2i &basept = cv::Point2i(0, 0), float ratio = 1.0);
+    void drawCube(cv::Mat &image, const cv::Mat &R, const cv::Mat &t, const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255),
+                    const cv::Point2i &basept = cv::Point2i(0, 0), float ratio = 1.0);
 
-    void drawPyramid(cv::Mat &image, const cv::Mat &R, const cv::Mat &t,
-        const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255));
+    void drawPyramid(cv::Mat &image, const cv::Mat &R, const cv::Mat &t, const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255));
 
     inline void wrapTo2PiInPlace(float &a) {
       bool was_neg = a < 0;

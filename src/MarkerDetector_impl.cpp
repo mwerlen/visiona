@@ -32,10 +32,12 @@
  *
  *  Created on: Mar 20, 2015
  *      Author: Davide A. Cucci (davide.cucci@epfl.ch)
+ *
+ *  Modified on: Aug 30, 2018
+ *      By: Maxime Werlen
  */
 
 #include "MarkerDetector_impl.h"
-#include "Timer.h"
 
 #include <thread>
 
@@ -80,24 +82,20 @@ MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) :
 
 }
 
-bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer,
-    Circle &inner, float &heading, DebugPlotConfig *dbg) {
+bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading) {
 
-  if (dbg != NULL) {
-    tic();
-  }
 
   Mat edges;
-  detectEdges(raw, edges, dbg);
+  detectEdges(raw, edges);
 
   Contours ctr;
-  detectContours(edges, ctr, dbg);
+  detectContours(edges, ctr);
 
   Circles circles;
-  filterContours(ctr, circles, dbg);
+  filterContours(ctr, circles);
 
   std::vector<CircleCluster> clusters;
-  clusterCircles(circles, clusters, dbg);
+  clusterCircles(circles, clusters);
 
   bool found = false;
 
@@ -110,7 +108,7 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer,
 
     int selectedCluster;
     found = selectMarker(raw, circles, representatives, selectedCluster,
-        heading, dbg);
+        heading);
 
     if (found) {
 
@@ -139,25 +137,10 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer,
     }
   }
 
-  if (dbg != NULL) {
-    dbg->tstats.tTotalDetection = toc();
-  }
-
   return found;
 }
 
-bool MarkerDetector_impl::measure(const cv::Mat &image,
-    std::shared_ptr<Target> tg,
-    DebugPlotConfig *dbg) {
-
-//bool MarkerDetector_impl::measure(const Mat &image, const Circle& outer,
-//    const Circle &inner, float heading, double &cx, double &cy, double &scale,
-//    double &phi, double &kappa, float black, float white,
-//    DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> tg) {
 
   // fit ellipses on the markers
   Ellipse outerElps, innerElps;
@@ -167,21 +150,17 @@ bool MarkerDetector_impl::measure(const cv::Mat &image,
   // refine with subpixel
   vector<Point2f> outerElpsCntSubpx;
   vector<double> outerAngles;
-  refineEllipseCntWithSubpixelEdges(image, *tg, outerElps, true, 2,
-      outerElpsCntSubpx, outerAngles);
+  refineEllipseCntWithSubpixelEdges(image, *tg, outerElps, true, 2, outerElpsCntSubpx, outerAngles);
 
   vector<Point2f> innerElpsCntSubpx;
   vector<double> innerAngles;
-  refineEllipseCntWithSubpixelEdges(image, *tg, innerElps, true, 2,
-      innerElpsCntSubpx, innerAngles);
+  refineEllipseCntWithSubpixelEdges(image, *tg, innerElps, true, 2, innerElpsCntSubpx, innerAngles);
 
   // undistort ellipse points
   vector<Point2f> outerElpsCntSubpx_und;
-  undistortPoints(outerElpsCntSubpx, outerElpsCntSubpx_und, _cfg.K,
-      _cfg.distortion, Mat(), _cfg.K);
+  undistortPoints(outerElpsCntSubpx, outerElpsCntSubpx_und, _cfg.K, _cfg.distortion, Mat(), _cfg.K);
   vector<Point2f> innerElpsCntSubpx_und;
-  undistortPoints(innerElpsCntSubpx, innerElpsCntSubpx_und, _cfg.K,
-      _cfg.distortion, Mat(), _cfg.K);
+  undistortPoints(innerElpsCntSubpx, innerElpsCntSubpx_und, _cfg.K, _cfg.distortion, Mat(), _cfg.K);
   //*/
 
   /* or not
@@ -202,12 +181,10 @@ bool MarkerDetector_impl::measure(const cv::Mat &image,
 
   // compute center
   Point2d center;
-  getDistanceWithGradientDescent(outerPoly, innerPoly, outerElps.center, 1e-6,
-      1e-2, center, 1e-8, 0);
+  getDistanceWithGradientDescent(outerPoly, innerPoly, outerElps.center, 1e-6, 1e-2, center, 1e-8, 0);
 
   // compute distance
-  getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, tg->distance,
-      tg->phi, tg->kappa, dbg);
+  getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, tg->distance, tg->phi, tg->kappa);
 
   // get the center in the distorted image
   center = distort(center);
@@ -216,64 +193,10 @@ bool MarkerDetector_impl::measure(const cv::Mat &image,
 
   tg->measured = true;
 
-  if (dbg != NULL) {
-
-    dbg->tstats.tMeasure = toc();
-
-    if (dbg->enabled && dbg->enableSubPixelEllipses) {
-      float ratio;
-      Point2i basept;
-
-      initZoomedSubregionSurface(tg->outer.center,
-          tg->outer.r * dbg->blitRegionWidthMultiplier,
-          dbg->rawImage, dbg->dbgImage, 1280, ratio, basept);
-
-//    circle(dbg->dbgImage, transformPoint(Point2f(cx, cy), basept, ratio),
-//        0.5 * ratio, Scalar(255, 0, 0), -1);
-//    ellipse(dbg->dbgImage, transofrmEllipse(outerElpsSubpx, basept, ratio),
-//        Scalar(255, 0, 0), 0.25 * ratio);
-//    ellipse(dbg->dbgImage, transofrmEllipse(innerElpsSubpx, basept, ratio),
-//        Scalar(255, 0, 0), 0.25 * ratio);
-
-      for (int i = 0; i < outerElpsCntSubpx.size(); ++i) {
-        circle(dbg->dbgImage,
-            transformPoint(outerElpsCntSubpx[i], basept, ratio),
-            0.25 * ratio, Scalar(0, 255, 0), -1);
-      }
-
-      for (int i = 0; i < innerElpsCntSubpx.size(); ++i) {
-        circle(dbg->dbgImage,
-            transformPoint(innerElpsCntSubpx[i], basept, ratio),
-            0.25 * ratio, Scalar(0, 0, 255), -1);
-      }
-
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-
-//      printf(" Center: (%.2f, %.2f), Distance: %.5f, Phi: %.5f, Kappa: %.5f\n",
-//          tg->cx, tg->cy, tg->scale, tg->phi / M_PI * 180.0, tg->kappa / M_PI * 180.0);
-
-      if (dbg->writeSubpixelContours) {
-        outputContour(outerElpsCntSubpx, outerAngles, dbg->debugFilesPath,
-            "contour_sbpx_",
-            dbg->frameNumber, "_out.txt");
-        outputContour(innerElpsCntSubpx, innerAngles, dbg->debugFilesPath,
-            "contour_sbpx_",
-            dbg->frameNumber, "_in.txt");
-      }
-    }
-  }
-
   return true;
 }
 
-void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw,
-    const Circle &outer, float heading, float &black, float &white,
-    DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white) {
 
   Ellipse outerElps;
   fitEllipse(outer.cnt, outerElps);
@@ -284,8 +207,7 @@ void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw,
   float outerElpsSize = (outerElps.size.width + outerElps.size.height) / 4.0;
 
   const float outScale = (outerElpsSize + outMargin) / outerElpsSize;
-  const float inScale = (_cfg.markerDiameter + _cfg.markerInnerDiameter) / 2.0
-      / _cfg.markerDiameter;
+  const float inScale = (_cfg.markerDiameter + _cfg.markerInnerDiameter) / 2.0  / _cfg.markerDiameter;
 
   // TODO: should be at the correct percentage
   float safetyAngle = atan(inMargin / (outerElpsSize * inScale)); // to avoid getting the white dots
@@ -315,55 +237,18 @@ void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw,
   }
   black /= signal.size();
 
-  if (dbg != NULL) {
-
-    dbg->tstats.tExposure = toc();
-
-    if (dbg->enabled && dbg->enableEsposure) {
-      cerr << "black: " << black << " white: " << white << endl;
-
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      Ellipse tmpOutElps = outerElps;
-      tmpOutElps.size.height *= outScale;
-      tmpOutElps.size.width *= outScale;
-
-      ellipse(dbg->dbgImage, tmpOutElps, Scalar(0, 0, 255));
-
-//    Ellipse tmpInElps = outerElps;
-//    tmpInElps.size.height *= inScale;
-//    tmpInElps.size.width *= inScale;
-//
-//    ellipse(dbg->dbgImage, tmpInElps, Scalar(0, 255, 0));
-
-      for_each(pts.begin(), pts.end(), [&dbg](const Point2f &p) {
-        circle(dbg->dbgImage, p, 1, Scalar(0,255,0),-1);
-      });
-
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
 }
 
-void MarkerDetector_impl::detectEdges(const Mat& raw, Mat& edges,
-    DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+void MarkerDetector_impl::detectEdges(const Mat& raw, Mat& edges) {
 
   Mat tmp;
 
   // with canny
   if (_cfg.CannyBlurKernelSize > 0) {
     blur(raw, tmp, Size(_cfg.CannyBlurKernelSize, _cfg.CannyBlurKernelSize));
-
-    Canny(tmp, edges, _cfg.CannyLowerThreshold, _cfg.CannyHigherThreshold, 3,
-        true);
+    Canny(tmp, edges, _cfg.CannyLowerThreshold, _cfg.CannyHigherThreshold, 3, true);
   } else {
-    Canny(raw, edges, _cfg.CannyLowerThreshold, _cfg.CannyHigherThreshold, 3,
-        true);
+    Canny(raw, edges, _cfg.CannyLowerThreshold, _cfg.CannyHigherThreshold, 3, true);
   }
   //*/
 
@@ -391,32 +276,9 @@ void MarkerDetector_impl::detectEdges(const Mat& raw, Mat& edges,
    cout << "max val: " << maxVal << endl;
 
    //*/
-
-  if (dbg != NULL) {
-
-    dbg->tstats.tEdgeDetection = toc();
-
-    if (dbg->enabled && dbg->enableEdgeDetection) {
-
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      for (int y = 0; y < dbg->dbgImage.rows; ++y) {
-        for (int x = 0; x < dbg->dbgImage.cols; ++x) {
-          if (edges.at<uchar>(y, x)) {
-            dbg->dbgImage.at<Vec3b>(y, x).val[2] = 255;
-          }
-        }
-      }
-
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
 }
 
-void MarkerDetector_impl::parallelThreshold(const cv::Mat& raw, cv::Mat& edges,
-    int nThreads, DebugPlotConfig* dbg)
-    {
+void MarkerDetector_impl::parallelThreshold(const cv::Mat& raw, cv::Mat& edges, int nThreads) {
 
   edges.create(raw.rows, raw.cols, CV_8UC1);
 
@@ -457,42 +319,12 @@ void MarkerDetector_impl::parallelThreshold(const cv::Mat& raw, cv::Mat& edges,
   }
 }
 
-void MarkerDetector_impl::detectContours(const Mat &edges, Contours &ctrs,
-    DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
-
+void MarkerDetector_impl::detectContours(const Mat &edges, Contours &ctrs) {
   ctrs.clear();
-
   findContours(edges, ctrs, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, Point(0, 0));
-
-  if (dbg != NULL) {
-
-    dbg->tstats.tContours = toc();
-
-    if (dbg->enabled && dbg->enableContours) {
-
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      for (unsigned int i = 0; i < ctrs.size(); i++) {
-        Scalar color(0, 0, 255);
-
-        drawContours(dbg->dbgImage, ctrs, i, color, 1, 8);
-      }
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
 }
 
-void MarkerDetector_impl::filterContours(const Contours& in, Circles& out,
-    DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
 
   out.clear();
 
@@ -533,34 +365,9 @@ void MarkerDetector_impl::filterContours(const Contours& in, Circles& out,
     }
 
   }
-
-  if (dbg != NULL) {
-
-    dbg->tstats.tFilteredContours = toc();
-
-    if (dbg->enabled && dbg->enableFilteredContours) {
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      for (unsigned int i = 0; i < out.size(); i++) {
-        Scalar color(0, 255, 0);
-
-        Contours tmp;
-        tmp.push_back(out[i].cnt);
-
-        drawContours(dbg->dbgImage, tmp, 0, color, 2, 2);
-      }
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
 }
 
-void MarkerDetector_impl::clusterCircles(const Circles &in,
-    std::vector<CircleCluster> &out, DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCluster> &out) {
 
   // for each circle, do a cluster with the best matching inner circle, if found
 
@@ -594,52 +401,9 @@ void MarkerDetector_impl::clusterCircles(const Circles &in,
     }
   }
 
-  if (dbg != NULL) {
-
-    dbg->tstats.tClusterCircles = toc();
-
-    if (dbg->enabled && dbg->enableCirclesClusters) {
-
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      std::vector<Scalar> colors;
-      colors.push_back(Scalar(255, 0, 0));
-      colors.push_back(Scalar(128, 128, 0));
-      colors.push_back(Scalar(0, 255, 0));
-      colors.push_back(Scalar(0, 128, 128));
-      colors.push_back(Scalar(0, 0, 255));
-      colors.push_back(Scalar(0, 128, 255));
-      colors.push_back(Scalar(0, 255, 255));
-      colors.push_back(Scalar(128, 128, 255));
-      colors.push_back(Scalar(255, 0, 255));
-      colors.push_back(Scalar(255, 128, 128));
-      colors.push_back(Scalar(255, 255, 0));
-
-      for (unsigned int i = 0; i < out.size(); i++) {
-
-        Scalar &color = colors[i % colors.size()];
-
-        for (int j = 0; j < out[i].circleIds.size(); ++j) {
-
-          Contours tmpcnt;
-          tmpcnt.push_back(in[out[i].circleIds[j]].cnt);
-
-          drawContours(dbg->dbgImage, tmpcnt, 0, color);
-        }
-      }
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
 }
 
-bool MarkerDetector_impl::selectMarker(const Mat& image,
-    const Circles &candidates, const vector<int> &representativesIds,
-    int &selectedCluster, float & theta, DebugPlotConfig *dbg) {
-
-  if (dbg != NULL) {
-    tic();
-  }
+bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidates, const vector<int> &representativesIds, int &selectedCluster, float & theta) {
 
   bool found = false;
 
@@ -675,87 +439,10 @@ bool MarkerDetector_impl::selectMarker(const Mat& image,
 //    cerr << M << endl;
   }
 
-  if (dbg != NULL) {
-    dbg->tstats.tSelectMarker = toc();
-
-    if (dbg->enabled && dbg->enableSelectedTargets) {
-      if (found) {
-        // copy it so I can modify
-        const Circle marker = candidates[representativesIds[selectedCluster]];
-
-        Ellipse e;
-        fitEllipse(marker.cnt, e);
-
-        stringstream s;
-        s << fixed << setprecision(2) << "w: " << e.size.width << " h: "
-            << e.size.height << endl;
-
-        float ratio = 1.0;
-        Point2i basept(0, 0);
-
-        if (dbg->blitSubRegion == true) {
-          initZoomedSubregionSurface(marker.center,
-              marker.r * dbg->blitRegionWidthMultiplier, dbg->rawImage,
-              dbg->dbgImage, 1280, ratio, basept);
-        } else {
-          initColorPlotSurfacte(dbg->dbgImage, dbg);
-        }
-
-        Scalar color(0, 0, 255);
-
-        e.center.x = (e.center.x - basept.x + 0.5) * ratio;
-        e.center.y = (e.center.y - basept.y + 0.5) * ratio;
-        e.size.width *= ratio;
-        e.size.height *= ratio;
-
-        ellipse(dbg->dbgImage, e, color, 3);
-
-        Point2f ls, le;
-
-        ls.x = e.center.x + cos(theta) * marker.r * 2.0 * ratio;
-        ls.y = e.center.y + sin(theta) * marker.r * 2.0 * ratio;
-
-        le.x = e.center.x - cos(theta) * marker.r * 2.0 * ratio;
-        le.y = e.center.y - sin(theta) * marker.r * 2.0 * ratio;
-
-        line(dbg->dbgImage, ls, le, color, 3);
-
-        putText(dbg->dbgImage, s.str(), Point(30, 30), FONT_HERSHEY_SIMPLEX, 1,
-            Scalar(0, 0, 255), 3);
-
-      } else {
-        initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-        std::vector<Scalar> colors;
-        colors.push_back(Scalar(255, 0, 0));
-        colors.push_back(Scalar(0, 255, 0));
-        colors.push_back(Scalar(0, 0, 255));
-        colors.push_back(Scalar(0, 255, 255));
-        colors.push_back(Scalar(255, 0, 255));
-        colors.push_back(Scalar(255, 255, 0));
-
-        for (auto it = 0; it < representativesIds.size() && it < 6; ++it) {
-          const Circle th = candidates[representativesIds[it]];
-
-          Ellipse e;
-          fitEllipse(th.cnt, e);
-
-          e.size.width *= _cfg.markerSignalRadiusPercentage;
-          e.size.height *= _cfg.markerSignalRadiusPercentage;
-
-          ellipse(dbg->dbgImage, e, colors[it], 3);
-        }
-      }
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
-
   return found;
 }
 
-bool MarkerDetector_impl::findConcentricCircles(const Circles &circles,
-    const CircleCluster &cluster, int &innerCircle, DebugPlotConfig *dbg) {
+bool MarkerDetector_impl::findConcentricCircles(const Circles &circles, const CircleCluster &cluster, int &innerCircle) {
 
   float repRadius = circles[cluster.rep].r;
   float searchedRadius = repRadius * _cfg.markerInnerDiameter
@@ -765,9 +452,7 @@ bool MarkerDetector_impl::findConcentricCircles(const Circles &circles,
   float diff = numeric_limits<float>::infinity();
 
   // search the circle in the cluster for which the radius is nearest wrt searchedRadius
-  for (auto it = cluster.circleIds.begin(); it != cluster.circleIds.end();
-      ++it) {
-
+  for (auto it = cluster.circleIds.begin(); it != cluster.circleIds.end(); ++it) {
     float d = fabs(circles[*it].r - searchedRadius);
     if (d < diff) {
       innerCircle = *it;
@@ -781,75 +466,15 @@ bool MarkerDetector_impl::findConcentricCircles(const Circles &circles,
     found = false;
   }
 
-  if (dbg != NULL) {
-
-    Scalar color(0, 0, 255);
-
-    const Circle &outer = circles[cluster.rep];
-    const Circle &inner = circles[innerCircle];
-
-    if (dbg->writeContours) {
-      outputContour(outer.cnt, dbg->debugFilesPath, "contour_",
-          dbg->frameNumber, "_out.txt");
-      outputContour(inner.cnt, dbg->debugFilesPath, "contour_",
-          dbg->frameNumber, "_in.txt");
-    }
-
-    if (dbg->blitSubRegion) {
-
-      float ratio;
-      Point2i basept;
-
-      initZoomedSubregionSurface(outer.center,
-          outer.r * dbg->blitRegionWidthMultiplier, dbg->rawImage,
-          dbg->dbgImage, 1280, ratio, basept);
-
-      auto transformfun = [&basept, &ratio](Point r) {
-        return (r - basept)*ratio + Point2i(0.5*ratio,0.5*ratio);
-      };
-
-      Contour outerCntAdapted(outer.cnt.size()), innerCntAdapted(
-          inner.cnt.size());
-
-      std::transform(outer.cnt.begin(), outer.cnt.end(),
-          outerCntAdapted.begin(), transformfun);
-      std::transform(inner.cnt.begin(), inner.cnt.end(),
-          innerCntAdapted.begin(), transformfun);
-
-      Contours cnts;
-      cnts.emplace_back(outerCntAdapted);
-      cnts.emplace_back(innerCntAdapted);
-
-      drawContours(dbg->dbgImage, cnts, -1, Scalar(0, 0, 255), 5);
-
-    } else {
-      initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-      Contours cnts;
-      cnts.push_back(outer.cnt);
-      cnts.push_back(inner.cnt);
-
-      drawContours(dbg->dbgImage, cnts, -1, color, 2, 2);
-    }
-
-    imshow(dbg->windowName, dbg->dbgImage);
-    waitKey(1);
-  }
-
   return found;
 }
 
-void MarkerDetector_impl::fitEllipse(const Contour& cnt, Ellipse& out,
-    DebugPlotConfig *dbg) {
-
+void MarkerDetector_impl::fitEllipse(const Contour& cnt, Ellipse& out) {
   out = cv::fitEllipse(cnt);
-
 }
 
 void MarkerDetector_impl::normalizeSignal(std::vector<float>& sig_in) {
-
-// depolarize
-
+  // depolarize
   Mat sig(1, sig_in.size(), CV_32FC1, sig_in.data());
 
   float u = mean(sig)[0];
@@ -874,15 +499,12 @@ void MarkerDetector_impl::normalizeSignal(std::vector<float>& sig_in) {
   }
 }
 
-void MarkerDetector_impl::computeNormalizedxCorr(
-    const std::vector<float>& sig_in, Mat &out) {
+void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_in, Mat &out) {
 
-// prepare signals
-
+  // prepare signals
   float raw[2 * sig_in.size()];
 
   for (unsigned int n = 0; n < 2; n++) {
-
     unsigned int segment = 0;
     float val = _cfg.markerSignalStartsWith;
 
@@ -916,8 +538,7 @@ void MarkerDetector_impl::computeNormalizedxCorr(
   matchTemplate(ref, sig, out, CV_TM_CCORR_NORMED);
 }
 
-void MarkerDetector_impl::getSignalInsideCircle(const Mat& image,
-    const Circle& circle, float radiusPercentage, std::vector<float>& signal) {
+void MarkerDetector_impl::getSignalInsideCircle(const Mat& image, const Circle& circle, float radiusPercentage, std::vector<float>& signal) {
 
   int N = ceil(2 * M_PI / (1.0 / circle.r));
 //  int N = 360;
@@ -946,9 +567,8 @@ void MarkerDetector_impl::getSignalInsideCircle(const Mat& image,
   }
 }
 
-void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image,
-    const Ellipse& ellipse, float radiusPercentage, std::vector<float>& signal,
-    float &increment, float thetasmall, float thetabig, vector<Point2f> *pts) {
+void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image, const Ellipse& ellipse, float radiusPercentage, std::vector<float>& signal,
+                                                float &increment, float thetasmall, float thetabig, vector<Point2f> *pts) {
 
   increment = 1.0
       / ((ellipse.size.width / 2.0 + ellipse.size.height / 2.0) / 2.0);
@@ -982,8 +602,7 @@ void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image,
   }
 }
 
-Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a,
-    float b, float phi) {
+Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a, float b, float phi) {
 
   float offset = 0.0;
   if (a < b) {
@@ -1001,14 +620,7 @@ Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a,
   return ret;
 }
 
-void MarkerDetector_impl::initColorPlotSurfacte(Mat& in,
-    const DebugPlotConfig *dbg) const {
-  cvtColor(dbg->rawImage, in, CV_GRAY2BGR);
-}
-
-void MarkerDetector_impl::drawCube(Mat& image, const Mat& R,
-    const Mat& t, const float l, const Scalar &color, const Point2i &basept,
-    float ratio) {
+void MarkerDetector_impl::drawCube(Mat& image, const Mat& R, const Mat& t, const float l, const Scalar &color, const Point2i &basept, float ratio) {
 
   std::vector<Point2f> pointsInImage;
   std::vector<Point3f> points;
@@ -1050,8 +662,7 @@ void MarkerDetector_impl::drawCube(Mat& image, const Mat& R,
   line(image, pointsInImage[7], pointsInImage[4], color, ratio * 1.25);
 }
 
-void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps,
-    const cv::Point2d& c, double r, double &mu, double &std, int N) {
+void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &mu, double &std, int N) {
 
   Point2d p1, p2;
   Eigen::Vector3d vr1, vr2, vrc;
@@ -1095,9 +706,7 @@ void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps,
   }
 }
 
-void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps,
-    const cv::Point2d& c, double r, double &d, double &phi, double &kappa,
-    DebugPlotConfig *dbg) {
+void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &d, double &phi, double &kappa) {
   Point2d p1, p2;
   Eigen::Vector3d vr1, vr2, vrc;
 
@@ -1208,8 +817,7 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps,
 
 }
 
-double MarkerDetector_impl::evalDistanceF(const EllipsePoly &outer,
-    const EllipsePoly &inner, const cv::Point2d &x, const cv::Point2d &x0) {
+double MarkerDetector_impl::evalDistanceF(const EllipsePoly &outer, const EllipsePoly &inner, const cv::Point2d &x, const cv::Point2d &x0) {
 
   double mu, std;
 
@@ -1231,9 +839,8 @@ double MarkerDetector_impl::evalDistanceF(const EllipsePoly &outer,
   return ret;
 }
 
-void MarkerDetector_impl::getDistanceWithGradientDescent(
-    const EllipsePoly& outer, const EllipsePoly& inner, const cv::Point2d x0,
-    double step, double lambda, cv::Point2d& x, double tolX, double tolFun) {
+void MarkerDetector_impl::getDistanceWithGradientDescent(const EllipsePoly& outer, const EllipsePoly& inner, const cv::Point2d x0, double step, 
+                                                         double lambda, cv::Point2d& x, double tolX, double tolFun) {
 
   Eigen::VectorXd D;
   Point2d newx;
@@ -1296,9 +903,7 @@ void MarkerDetector_impl::getDistanceWithGradientDescent(
   }
 }
 
-void MarkerDetector_impl::buildCircleHolesImage(const EllipsePoly& elps,
-    const cv::Point2f& c, double targetRaduis, const string &fname, int N,
-    float dx) {
+void MarkerDetector_impl::buildCircleHolesImage(const EllipsePoly& elps, const cv::Point2f& c, double targetRaduis, const string &fname, int N, float dx) {
 
   cv::Mat img(2 * N + 1, 2 * N + 1, CV_32F), normalized;
 
@@ -1319,8 +924,7 @@ void MarkerDetector_impl::buildCircleHolesImage(const EllipsePoly& elps,
 
 }
 
-void MarkerDetector_impl::initZoomedSubregionSurface(Point2i center, float r,
-    Mat &in, Mat &out, int size, float &ratio, Point2i &basept) {
+void MarkerDetector_impl::initZoomedSubregionSurface(Point2i center, float r, Mat &in, Mat &out, int size, float &ratio, Point2i &basept) {
 
   int roundedr = roundf(r);
 
@@ -1354,9 +958,8 @@ void MarkerDetector_impl::initZoomedSubregionSurface(Point2i center, float r,
   ratio = (float) size / 2.0 / roundedr;
 }
 
-void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image,
-    const Ellipse &elps, const EllipsePoly &poly, float theta, float a, float b,
-    cv::Point2f &subpixedge, int N, DebugPlotConfig *dbg) {
+void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps, const EllipsePoly &poly, float theta, 
+                                                        float a, float b, cv::Point2f &subpixedge, int N) {
 
   // evaluate preliminary edge position
   Point2f e = evalEllipse(theta, elps.center, elps.size.width / 2.0,
@@ -1503,32 +1106,10 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image,
   subpixedge = e
       + Point2f((swapmult * mu + maxDeltaI) * cos(g),
           (swapmult * mu + maxDeltaI) * sin(g));
-
-  if (dbg != NULL) {
-
-    float ratio;
-    Point2i basept;
-
-    initZoomedSubregionSurface(elps.center, 0.75 * elps.size.width,
-        dbg->rawImage, dbg->dbgImage, 1280, ratio, basept);
-
-    for (int i = -N; i <= N; ++i) {
-      circle(dbg->dbgImage, transformPoint(orth[i + N], basept, ratio),
-          0.5 * ratio, Scalar(0, 0, 255), -1);
-    }
-
-    circle(dbg->dbgImage, transformPoint(subpixedge, basept, ratio),
-        0.5 * ratio, Scalar(0, 255, 0), -1);
-
-    imshow(dbg->windowName, dbg->dbgImage);
-    waitKey(1);
-  }
 }
 
-void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(
-    const cv::Mat &image, const Target &tg, const Ellipse &elps,
-    bool ignoreSignalAreas, int N, std::vector<cv::Point2f> &cnt,
-    std::vector<double> &angles, DebugPlotConfig *dbg) {
+void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image, const Target &tg, const Ellipse &elps, bool ignoreSignalAreas, 
+                                                            int N, std::vector<cv::Point2f> &cnt, std::vector<double> &angles) {
 
   EllipsePoly elpsPoly;
   getEllipsePolynomialCoeff(elps, elpsPoly);
@@ -1579,7 +1160,7 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(
     if (considerThisAngle) {
       Point2f edge;
       //  subpixelEdgeWithLeastSquares(image, elps, elpsPoly, heading + theta,
-      //      black, white - black, edge, N, dbg);
+      //      black, white - black, edge, N);
 
       // disable exposure hint
       subpixelEdgeWithLeastSquares(image, elps, elpsPoly, tg.heading + theta,
@@ -1593,34 +1174,12 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(
 
     theta += inc;
   }
-
-  if (dbg != NULL) {
-
-    float ratio;
-    Point2i basept;
-
-    initZoomedSubregionSurface(elps.center, 1.5 * elpsSize, dbg->rawImage,
-        dbg->dbgImage, 1280, ratio, basept);
-
-    for (int i = 0; i < cnt.size(); ++i) {
-      circle(dbg->dbgImage, transformPoint(cnt[i], basept, ratio),
-          0.5 * ratio, Scalar(0, 0, 255), -1);
-    }
-
-    imshow(dbg->windowName, dbg->dbgImage);
-    waitKey(1);
-  }
 }
 
-bool MarkerDetector_impl::measureRough(const cv::Mat &image,
-    std::shared_ptr<Target> tg, DebugPlotConfig *dbg) {
+bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Target> tg) {
 
   if (!tg->detected) {
     return false;
-  }
-
-  if (dbg != NULL) {
-    tic();
   }
 
   bool pointsFound = true;
@@ -1779,47 +1338,6 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image,
     tg->roughlyMeasured = true;
   }
 
-  if (dbg != NULL) {
-
-    dbg->tstats.tMeasureRough = toc();
-
-    if (dbg->enabled && dbg->enableRoughMeasure) {
-
-      float ratio = 1.0;
-      Point2i basept(0, 0);
-      if (dbg->blitSubRegion) {
-        initZoomedSubregionSurface(tg->outer.center,
-            tg->outer.r * dbg->blitRegionWidthMultiplier, dbg->rawImage,
-            dbg->dbgImage, 1280, ratio, basept);
-      } else {
-        initColorPlotSurfacte(dbg->dbgImage, dbg);
-      }
-
-      if (success & pointsFound) {
-
-        for (int i = 0; i < NPTS; ++i) {
-          circle(dbg->dbgImage,
-              transformPoint(tg->codePoints[i], basept, ratio),
-              ratio * 2, Scalar(0, i * 255.0 / NPTS, 255), -1);
-        }
-
-        drawCube(dbg->dbgImage, tg->roughR, tg->rought,
-            _cfg.markerDiameter * 1.5,
-            Scalar(255, 0, 0),
-            basept, ratio);
-      }
-
-      for (int i = 0; i < NPTS; ++i) {
-        circle(dbg->dbgImage,
-            transformPoint(tg->seedPoints[i], basept, ratio),
-            ratio * 0.5, Scalar(i * 255.0 / NPTS, 0, 0), -1);
-      }
-
-      imshow(dbg->windowName, dbg->dbgImage);
-      waitKey(1);
-    }
-  }
-
   /* check that the mask is completely black
    for (int x = 1; x < floodfillMask.cols - 1; ++x) {
    for (int y = 1; y < floodfillMask.rows - 1; ++y) {
@@ -1899,8 +1417,7 @@ void MarkerDetector_impl::drawPyramid(cv::Mat& image, const cv::Mat& R,
 
 }
 
-void MarkerDetector_impl::getEllipseMatrix(const Ellipse &elps,
-    Eigen::Matrix3d &Q, DebugPlotConfig *dbg) {
+void MarkerDetector_impl::getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q) {
 
   double a, b, cx, cy, theta;
 
@@ -1932,8 +1449,7 @@ void MarkerDetector_impl::getEllipseMatrix(const Ellipse &elps,
 
 }
 
-void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps,
-    EllipsePoly &poly) {
+void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps, EllipsePoly &poly) {
   double a, b, cx, cy, theta;
 
   a = elps.size.width / 2;
@@ -1970,8 +1486,7 @@ void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps,
 
 }
 
-void MarkerDetector_impl::getEllipseLineIntersections(const EllipsePoly& em,
-    double x0, double y0, double theta, cv::Point2d& p1, cv::Point2d& p2) {
+void MarkerDetector_impl::getEllipseLineIntersections(const EllipsePoly& em, double x0, double y0, double theta, cv::Point2d& p1, cv::Point2d& p2) {
   Eigen::Vector3d lm;
 
   if (fabs(theta - M_PI / 2.0) < 1e-6) {
@@ -1996,8 +1511,7 @@ void MarkerDetector_impl::getEllipseLineIntersections(const EllipsePoly& em,
   }
 }
 
-void MarkerDetector_impl::getProjectedCircleCenter(const Circles &in,
-    cv::Point2f &projCenter, DebugPlotConfig *dbg) {
+void MarkerDetector_impl::getProjectedCircleCenter(const Circles &in, cv::Point2f &projCenter) {
 
 // if only 2 concentric circles
   if (in.size() == 2) {
@@ -2054,14 +1568,6 @@ void MarkerDetector_impl::getProjectedCircleCenter(const Circles &in,
 
   }
 
-  if (dbg != NULL) {
-    initColorPlotSurfacte(dbg->dbgImage, dbg);
-
-    circle(dbg->dbgImage, projCenter, 3, Scalar(255, 0, 0), -1);
-
-    imshow(dbg->windowName, dbg->dbgImage);
-    waitKey(1);
-  }
 }
 
 }

@@ -44,7 +44,6 @@
 #include <opencv/cv.h>
 
 #include "MarkerDetectorConfig.h"
-#include "DebugPlotConfig.h"
 
 namespace visiona {
 
@@ -104,39 +103,32 @@ class MarkerDetector {
      * \brief search the image for the target
      *
      * param image the input image, must be of type CV_8UC1
-     * param dbg the debug configuration, default, NO
      *
      * return A vector containing the targets found (currently only one is returned)
      */
-    virtual std::vector<std::shared_ptr<Target>> detect(const cv::Mat &image,
-        DebugPlotConfig *dbg = NULL) = 0;
+    virtual std::vector<std::shared_ptr<Target>> detect(const cv::Mat &image) = 0;
 
     /**
      * \brief given an already detected target, determines value for the black and white levels
      *
      * param tg the detected target
-     * param dbg the debug configuration, default, NO
      */
-    virtual void evaluateExposure(const cv::Mat &image,
-        std::shared_ptr<Target> tg, DebugPlotConfig *dbg = NULL) = 0;
+    virtual void evaluateExposure(const cv::Mat &image, std::shared_ptr<Target> tg) = 0;
 
     /**
      * \brief roughly measures the target based on the center of the white circles forming the code
      *
      * param tg the detected target
      * param seedPoints forces to use the provided set of ordered bubble positions instead of a prediction based on the heading
-     * param dbg the debug configuration, default, NO
      */
-    virtual bool measureRough(const cv::Mat &image, std::shared_ptr<Target> tg, DebugPlotConfig *dbg = NULL) = 0;
+    virtual bool measureRough(const cv::Mat &image, std::shared_ptr<Target> tg) = 0;
 
     /**
      * \brief measures accurately the target based on the concentric circle algorithm
      *
      * param tg the detected target
-     * param dbg the debug configuration, default, NO
      */
-    virtual bool measure(const cv::Mat &image, std::shared_ptr<Target> tg,
-        DebugPlotConfig *dbg = NULL) = 0;
+    virtual bool measure(const cv::Mat &image, std::shared_ptr<Target> tg) = 0;
 
     MarkerDetector(const MarkerDetectorConfig &cfg) :
         _cfg(cfg) {
