@@ -1,3 +1,5 @@
 /target/*.aux
 /target/*.log
 /build
+.idea
+__pycache__
