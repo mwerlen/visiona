@@ -124,10 +124,6 @@ class MarkerDetector_impl: public MarkerDetector {
 
     double evalDistanceF(const EllipsePoly &outer, const EllipsePoly &inner, const cv::Point2d &x, const cv::Point2d &x0);
 
-    void getProjectedCircleCenter(const Circles &in, cv::Point2f &projCenter);
-
-    void buildCircleHolesImage(const EllipsePoly &elps, const cv::Point2f &c, double d, const std::string &fname, int N, float dx);
-
   protected:
     void subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps, const EllipsePoly &poly, float theta, 
                                       float a, float b, cv::Point2f &edge, int N = 2);
@@ -145,10 +141,6 @@ class MarkerDetector_impl: public MarkerDetector {
     void computeNormalizedxCorr(const std::vector<float> &signal, cv::Mat &out);
 
     cv::Point2f evalEllipse(float at, const cv::Point2f &c, float a, float b, float phi);
-
-    void initColorPlotSurfacte(cv::Mat &in) const;
-
-    void initZoomedSubregionSurface(cv::Point2i center, float r, cv::Mat &in, cv::Mat &out, int size, float &ratio, cv::Point2i &basept);
 
     inline cv::Point2i transformPoint(const cv::Point2f &in, const cv::Point2i &basept, float ratio) {
       return (in + cv::Point2f(-basept.x + 0.5, -basept.y + 0.5)) * ratio;
@@ -171,11 +163,6 @@ class MarkerDetector_impl: public MarkerDetector {
 
     cv::Point2f distort(const cv::Point2f &p);
 
-    void drawCube(cv::Mat &image, const cv::Mat &R, const cv::Mat &t, const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255),
-                    const cv::Point2i &basept = cv::Point2i(0, 0), float ratio = 1.0);
-
-    void drawPyramid(cv::Mat &image, const cv::Mat &R, const cv::Mat &t, const float l, const cv::Scalar &color = cv::Scalar(0, 0, 255));
-
     inline void wrapTo2PiInPlace(float &a) {
       bool was_neg = a < 0;
       a = std::fmod(a, 2.0 * M_PI);
@@ -188,67 +175,6 @@ class MarkerDetector_impl: public MarkerDetector {
       towrap = (towrap + size) % size;
     }
 
-    template<class T>
-    inline void printVector(const std::vector<T> &in) {
-      for (unsigned int i = 0; i < in.size(); ++i) {
-        std::cerr << in[i] << " ";
-      }
-      std::cerr << std::endl;
-    }
-
-    template<class T>
-    bool outputContour(const std::vector<T> &cnt, const std::string &path,
-        const std::string &prefix, long int frameNumber,
-        const std::string &suffix) {
-
-      std::stringstream fname;
-      fname << path << "/" << prefix << frameNumber << suffix;
-
-      std::ofstream f(fname.str(), std::ios_base::out);
-
-      if (!f.is_open()) {
-        return false;
-      }
-
-      f << std::fixed;
-      f.precision(12);
-
-      for_each(cnt.begin(), cnt.end(),
-          [&f](const T &p) {f << p.x << " " << p.y << std::endl;});
-
-      f.close();
-
-      return true;
-    }
-
-    template<class T>
-    bool outputContour(const std::vector<T> &cnt,
-        const std::vector<double> &angles, const std::string &path,
-        const std::string &prefix, long int frameNumber,
-        const std::string &suffix) {
-
-      assert(cnt.size() == angles.size());
-
-      std::stringstream fname;
-      fname << path << "/" << prefix << frameNumber << suffix;
-
-      std::ofstream f(fname.str(), std::ios_base::out);
-
-      if (!f.is_open()) {
-        return false;
-      }
-
-      f << std::fixed;
-      f.precision(12);
-
-      for (int i = 0; i < cnt.size(); ++i) {
-        f << cnt[i].x << " " << cnt[i].y << " " << angles[i] << std::endl;
-      }
-
-      f.close();
-
-      return true;
-    }
 };
 
 }

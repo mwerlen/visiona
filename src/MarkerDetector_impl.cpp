@@ -525,15 +525,6 @@ void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_i
 
   Mat sig(1, sig_in.size(), CV_32FC1, const_cast<float *>(sig_in.data()));
 
-  /*
-   cerr << "-------------" << endl;
-   printVector(sig_in);
-   for (int k = 0; k < 2 * sig_in.size(); k++) {
-   cerr << raw[k] << ", ";
-   }
-   cerr << endl;
-   //*/
-
 // compute cross correlation
   matchTemplate(ref, sig, out, CV_TM_CCORR_NORMED);
 }
@@ -618,48 +609,6 @@ Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a, fl
       + b * sin(at - phi + offset - M_PI) * cos(phi + offset);
 
   return ret;
-}
-
-void MarkerDetector_impl::drawCube(Mat& image, const Mat& R, const Mat& t, const float l, const Scalar &color, const Point2i &basept, float ratio) {
-
-  std::vector<Point2f> pointsInImage;
-  std::vector<Point3f> points;
-
-  float s = l / 2.0;
-
-  points.push_back(Point3f(-s, -s, 0.0));
-  points.push_back(Point3f(-s, s, 0.0));
-  points.push_back(Point3f(s, s, 0.0));
-  points.push_back(Point3f(s, -s, 0.0));
-
-  points.push_back(Point3f(-s, -s, -2.0 * s));
-  points.push_back(Point3f(-s, s, -2.0 * s));
-  points.push_back(Point3f(s, s, -2.0 * s));
-  points.push_back(Point3f(s, -s, -2.0 * s));
-
-  projectPoints(points, R, t, _cfg.K, _cfg.distortion, pointsInImage);
-
-  for (int i = 0; i < pointsInImage.size(); ++i) {
-    pointsInImage[i] = transformPoint(pointsInImage[i], basept, ratio);
-  }
-
-  // TODO: the face on the marker for now it is red
-  line(image, pointsInImage[0], pointsInImage[1], Scalar(0, 0, 255),
-      ratio * 1.25);
-  line(image, pointsInImage[1], pointsInImage[2], Scalar(0, 0, 255),
-      ratio * 1.25);
-  line(image, pointsInImage[2], pointsInImage[3], Scalar(0, 0, 255),
-      ratio * 1.25);
-  line(image, pointsInImage[3], pointsInImage[0], Scalar(0, 0, 255),
-      ratio * 1.25);
-  line(image, pointsInImage[0], pointsInImage[4], color, ratio * 1.25);
-  line(image, pointsInImage[1], pointsInImage[5], color, ratio * 1.25);
-  line(image, pointsInImage[2], pointsInImage[6], color, ratio * 1.25);
-  line(image, pointsInImage[3], pointsInImage[7], color, ratio * 1.25);
-  line(image, pointsInImage[4], pointsInImage[5], color, ratio * 1.25);
-  line(image, pointsInImage[5], pointsInImage[6], color, ratio * 1.25);
-  line(image, pointsInImage[6], pointsInImage[7], color, ratio * 1.25);
-  line(image, pointsInImage[7], pointsInImage[4], color, ratio * 1.25);
 }
 
 void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &mu, double &std, int N) {
@@ -903,61 +852,6 @@ void MarkerDetector_impl::getDistanceWithGradientDescent(const EllipsePoly& oute
   }
 }
 
-void MarkerDetector_impl::buildCircleHolesImage(const EllipsePoly& elps, const cv::Point2f& c, double targetRaduis, const string &fname, int N, float dx) {
-
-  cv::Mat img(2 * N + 1, 2 * N + 1, CV_32F), normalized;
-
-  double mu, std;
-
-  for (int x = -N; x <= N; ++x) {
-    for (int y = -N; y <= N; ++y) {
-      getDistanceGivenCenter(elps, c + Point2f((float) x * dx, (float) y * dx),
-          targetRaduis, mu, std, 4);
-
-      img.at<float>(x + N, y + N) = std;
-    }
-  }
-
-  ofstream f(fname);
-  f << cv::format(img, "csv") << std::endl;
-  f.close();
-
-}
-
-void MarkerDetector_impl::initZoomedSubregionSurface(Point2i center, float r, Mat &in, Mat &out, int size, float &ratio, Point2i &basept) {
-
-  int roundedr = roundf(r);
-
-  // first select the interesting region
-  int tx = center.x - roundedr;
-  int ty = center.y - roundedr;
-
-  int basex = std::max(0, tx);
-  int basey = std::max(0, ty);
-  int width = std::min(center.x, roundedr)
-      + std::min(in.cols - center.x, roundedr);
-  int height = std::min(center.y, roundedr)
-      + std::min(in.rows - center.y, roundedr);
-
-  // blit it on a 16:9 black image
-
-  Rect r1 = Rect(basex, basey, width, height);
-  Rect r2 = Rect(-std::min(0, tx), -std::min(0, ty), width, height);
-
-  Mat roi(2 * roundedr, 2 * roundedr, CV_8UC1, Scalar(0, 0, 0));
-  in(r1).copyTo(roi(r2));
-
-  // convert it to color
-  Mat roibgr;
-  cvtColor(roi, roibgr, CV_GRAY2BGR);
-
-  // resize the image
-  resize(roibgr, out, Size(size, size), 0, 0, INTER_NEAREST);
-
-  basept = Point2i(basex - r2.x, basey - r2.y);
-  ratio = (float) size / 2.0 / roundedr;
-}
-
 void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps, const EllipsePoly &poly, float theta, 
                                                         float a, float b, cv::Point2f &subpixedge, int N) {
 
@@ -1074,32 +968,6 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
 
     mu = mu - dx(0);
     logsigma = logsigma - dx(1);
-
-    /* write some debug output
-     cerr << "it: " << it << " mu:   " << mu << " logsigma: " << logsigma
-     << " ||err||: "
-     << err.norm() << endl;
-
-     cerr << "predicted: ";
-     for (int i = -N; i <= N; i++) {
-     float y = i;
-     cerr
-     << (2.0 * a + b
-     - b
-     * sqrt(
-     1.0
-     - exp(
-     (-2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2))))
-     * Sign(mu - y)) / 2.0 << " ";
-     }
-
-     cerr << "\nmeasured: ";
-     printVector(subpixvalues);
-
-     cerr << "residuals: " << err.transpose() << endl;
-
-     cerr << "dmu: " << dx(0) << " dsigma: " << dx(1) << endl;
-     //*/
 
   } while (fabs(dx(0)) > 1e-2 && it <= 5);
 
@@ -1387,35 +1255,6 @@ Point2f MarkerDetector_impl::distort(const Point2f& p) {
   return Point2f(xDistort, yDistort);
 }
 
-void MarkerDetector_impl::drawPyramid(cv::Mat& image, const cv::Mat& R,
-    const cv::Mat& t, const float l, const cv::Scalar& color) {
-
-  std::vector<Point2f> pointsInImage;
-  std::vector<Point3f> points;
-
-  float s = l / 2.0;
-
-  points.push_back(Point3f(-s, -s, 0.0));
-  points.push_back(Point3f(-s, s, 0.0));
-  points.push_back(Point3f(s, s, 0.0));
-  points.push_back(Point3f(s, -s, 0.0));
-
-  points.push_back(Point3f(0.0, 0.0, -4.0 * s));
-
-  projectPoints(points, R, t, _cfg.K, _cfg.distortion, pointsInImage);
-
-  line(image, pointsInImage[0], pointsInImage[1], color, 2);
-  line(image, pointsInImage[1], pointsInImage[2], color, 2);
-  line(image, pointsInImage[2], pointsInImage[3], color, 2);
-  line(image, pointsInImage[3], pointsInImage[0], color, 2);
-  line(image, pointsInImage[0], pointsInImage[4], color, 2);
-
-  line(image, pointsInImage[4], pointsInImage[0], color, 2);
-  line(image, pointsInImage[4], pointsInImage[1], color, 2);
-  line(image, pointsInImage[4], pointsInImage[2], color, 2);
-  line(image, pointsInImage[4], pointsInImage[3], color, 2);
-
-}
 
 void MarkerDetector_impl::getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q) {
 
@@ -1510,64 +1349,4 @@ void MarkerDetector_impl::getEllipseLineIntersections(const EllipsePoly& em, dou
 #   include "generated/EllipseLineIntersection.cpp"
   }
 }
-
-void MarkerDetector_impl::getProjectedCircleCenter(const Circles &in, cv::Point2f &projCenter) {
-
-// if only 2 concentric circles
-  if (in.size() == 2) {
-
-    // fit ellipses
-    const Circle &c1 = in.at(0);
-    const Circle &c2 = in.at(1);
-
-    Ellipse e1;
-    Ellipse e2;
-    fitEllipse(c1.cnt, e1);
-    fitEllipse(c2.cnt, e2);
-
-    // compute ellipse matrices
-    Eigen::Matrix3d Q1;
-    Eigen::Matrix3d Q2;
-    getEllipseMatrix(e1, Q1);
-    getEllipseMatrix(e2, Q2);
-
-    // compute lambda3 matrix
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> sas(Q2 * Q1.inverse());
-    Eigen::Vector3d lam;
-    lam(0) = sas.eigenvalues()(0);
-    lam(1) = sas.eigenvalues()(1);
-    lam(2) = sas.eigenvalues()(2);
-
-    float lam3 = 0;
-    for (int i = 0; i < 2; i++) {
-      for (int j = i + 1; j < 3; j++) {
-
-        // compute metric
-        float metric = 2 * abs(abs(lam(i)) - abs(lam(j)))
-            / (abs(lam(i)) + abs(lam(j)));
-
-        if (metric < 0.1) {
-          lam3 = (abs(lam(i)) + abs(lam(j))) / 2;
-        }
-      }
-    }
-
-    // compute M = (Q1^-1) - lambda3*(Q2^-1) and normalize wrt
-    // 3rd column to get homogeneous coordinates
-    Eigen::Matrix3d M = Q1.inverse() - lam3 * Q2.inverse();
-
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-        M(i, j) = M(i, j) / M(i, 2);
-      }
-    }
-
-    // Take average of (non-zero) row vectors to compute homogeneous center
-    projCenter.x = (M(0, 0) + M(1, 0) + M(2, 0)) / 3;
-    projCenter.y = (M(0, 1) + M(1, 1) + M(2, 1)) / 3;
-
-  }
-
-}
-
 }
