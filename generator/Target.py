@@ -1,4 +1,6 @@
+#!/usr/bin/python3
 # -*- coding: utf8 -*-
+# vim: set fileencoding=utf-8 :
 
 from math import asin, pi
 
@@ -52,3 +54,5 @@ class Target:
         signal.sort()
         return "[" + ",".join(map(str, signal)) + "]"
 
+    def __repr__(self):
+        return repr((self.target_id, self.sequence))

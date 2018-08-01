@@ -1,0 +1,47 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+%\usepackage[a0paper]{geometry}
+\usepackage[top=2cm, bottom=3cm, left=1cm, right=1cm]{geometry}
+\geometry{a4paper}
+
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\headheight=30pt
+\renewcommand{\footrulewidth}{0.4pt}
+\cfoot{\small Série 1}
+\chead{\large Sogelink}
+\lhead{\Huge26}
+\rhead{\Huge26}
+\lfoot{\Huge26}
+\rfoot{\Huge26}
+
+\usepackage{tikz}
+\usepgflibrary{shapes}
+%\usetikzlibrary{shapes}
+%\usetikzlibrary{backgrounds,fit,shapes}
+%\usetikzlibrary{positioning}
+
+\pagenumbering{gobble}
+
+\begin{document}
+\begin{centering}
+%\begin{tikzpicture}
+% Centers the image coordinate system to the center of the page
+\begin{tikzpicture}[remember picture,overlay,shift={(current page.center)}]
+
+% Concentric circles
+\fill[black] (0,0) circle (8cm);  
+\fill[white] (0,0) circle (3.2cm);  
+\fill[black] (0,0) circle (0.1cm);  
+\node[below, black] at (0,-0.2) {\Huge 26};
+
+% Code
+\fill[white] ( 0.00000,  -5.60000) circle (0.8000cm);
+\fill[white] ( -0.00000,  5.60000) circle (0.8000cm);
+\fill[white] ( 3.95980,  3.95980) circle (0.8000cm);
+
+
+\end{tikzpicture}
+\end{centering}
+\end{document}

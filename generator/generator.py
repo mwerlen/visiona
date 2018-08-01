@@ -4,6 +4,7 @@
 
 import logging;
 from Target import *
+import LaTeX_printer
 
 log = logging.getLogger("generator")
 log.addHandler(logging.StreamHandler())
@@ -43,6 +44,10 @@ def generate_targets(bits):
 
 
 if __name__ == "__main__":
+    LaTeX_printer.create_target_dir()
     targets = generate_targets(8)
+    sorted(targets, key=lambda target: target.sequence)
     log.info(str(len(targets))+" targets found")
-    log.info(targets[0].getSignal())
+    for target in targets:
+        log.debug(target)
+        LaTeX_printer.latex_print(target)

@@ -3,3 +3,5 @@
 /build
 .idea
 __pycache__
+target_*.aux
+target_*.log
