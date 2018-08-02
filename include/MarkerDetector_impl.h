@@ -59,7 +59,6 @@ class MarkerDetector_impl: public MarkerDetector {
 
     struct CircleCluster {
         cv::Point2f center;
-
         int rep; // the representative circle
         std::vector<int> circleIds;
     };
@@ -95,8 +94,6 @@ class MarkerDetector_impl: public MarkerDetector {
 
     void detectEdges(const cv::Mat &raw, cv::Mat &edges);
 
-    void parallelThreshold(const cv::Mat &raw, cv::Mat &edges, int nThreads);
-
     void detectContours(const cv::Mat &edges, Contours &out);
 
     void filterContours(const Contours &in, Circles &out);
@@ -105,11 +102,7 @@ class MarkerDetector_impl: public MarkerDetector {
 
     bool selectMarker(const cv::Mat &image, const Circles &in, const std::vector<int> &ids, int &mId, float &theta);
 
-    bool findConcentricCircles(const Circles &circles, const CircleCluster &cluster, int &innerCircle);
-
     void fitEllipse(const Contour &cnt, Ellipse &e);
-
-    void getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q);
 
     void getEllipsePolynomialCoeff(const Ellipse &in, EllipsePoly &out);
 

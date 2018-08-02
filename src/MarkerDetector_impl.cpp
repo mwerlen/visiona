@@ -52,8 +52,11 @@ using namespace std;
 
 namespace visiona {
 
-MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) :
-    MarkerDetector(cfg) {
+/*
+ * Constructor initialise dot positions (_worldPoints) from config
+ *
+ */
+MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) : MarkerDetector(cfg) {
 
   for (int cnt = 0; cnt < _cfg.markerSignalModel.size() / 2; ++cnt) {
     int i = (_cfg.markerSignalStartsWith == 1.0 ? 0 : 1) + 2 * cnt;
@@ -82,8 +85,17 @@ MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) :
 
 }
 
-bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading) {
 
+/*
+ * detect method do the following steps :
+ *   - detecting edges
+ *   - starting with edges detecting contours
+ *   - starting with contours detecting circles
+ *   - starting with circles detecting clusters (set of two concentric circles)
+ *   - Best matching circle (with respect to the reference signal) is selected and theta angle computed
+ * Heading (angle between ref and signal), Inner and Outer circle are set.
+ */
+bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading) {
 
   Mat edges;
   detectEdges(raw, edges);
@@ -111,35 +123,22 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inne
         heading);
 
     if (found) {
-
       // in which we have exactly two circles per cluster
       assert(clusters[selectedCluster].circleIds.size() == 2);
 
       outer = circles[clusters[selectedCluster].circleIds[0]];
       inner = circles[clusters[selectedCluster].circleIds[1]];
-      //*/
-
-      /* in which in each cluster there can be many circles
-       int selectedOuterId = clusters[selectedCluster].rep;
-       outer = circles[selectedOuterId];
-
-       // for the selected cluster find the concentric circle
-       int selectedInnerId;
-       bool innerCircleFound = findConcentricCircles(circles,
-       clusters[selectedCluster], selectedInnerId);
-
-       if (innerCircleFound) {
-       inner = circles[selectedInnerId];
-       return true;
-       }
-       return false;
-       */
     }
   }
 
   return found;
 }
 
+/*
+ * Measure method will compute ellipse instead of circles and do computations again
+ * to get target center and distance
+ *
+ */
 bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> tg) {
 
   // fit ellipses on the markers
@@ -161,12 +160,6 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> 
   undistortPoints(outerElpsCntSubpx, outerElpsCntSubpx_und, _cfg.K, _cfg.distortion, Mat(), _cfg.K);
   vector<Point2f> innerElpsCntSubpx_und;
   undistortPoints(innerElpsCntSubpx, innerElpsCntSubpx_und, _cfg.K, _cfg.distortion, Mat(), _cfg.K);
-  //*/
-
-  /* or not
-   vector<Point2f> outerElpsCntSubpx_und = outerElpsCntSubpx;
-   vector<Point2f> innerElpsCntSubpx_und = innerElpsCntSubpx;
-   //*/
 
   // fit the ellipse
   Ellipse outerElpsSubpx = cv::fitEllipse(outerElpsCntSubpx_und);
@@ -196,6 +189,11 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> 
   return true;
 }
 
+
+/*
+ * Compute min (white) and max (black) color from circle
+ *
+ */
 void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white) {
 
   Ellipse outerElps;
@@ -239,6 +237,11 @@ void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &out
 
 }
 
+
+/*
+ * Edge detection is done with Canny from openCV
+ *
+ */
 void MarkerDetector_impl::detectEdges(const Mat& raw, Mat& edges) {
 
   Mat tmp;
@@ -250,80 +253,22 @@ void MarkerDetector_impl::detectEdges(const Mat& raw, Mat& edges) {
   } else {
     Canny(raw, edges, _cfg.CannyLowerThreshold, _cfg.CannyHigherThreshold, 3, true);
   }
-  //*/
-
-  /* with thresholding (single thread)
-   adaptiveThreshold(raw, edges, 255, ADAPTIVE_THRESH_MEAN_C,
-   THRESH_BINARY_INV, 15, 7);
-   //*/
-
-  /* parallel version, multithread
-   parallelThreshold(raw, edges, 4);
-   //*/
-
-  /* debug parallel threasholding
-   Mat test;
-   tStart = clock();
-   adaptiveThreshold(raw, test, 255, ADAPTIVE_THRESH_MEAN_C,
-   THRESH_BINARY_INV, 7, 7);
-   printf("Single: %.6fs\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
-
-   double minVal, maxVal;
-   Point minLoc, maxLoc;
-   minMaxLoc(test-edges, &minVal, &maxVal, &minLoc, &maxLoc );
-
-   cout << "min val : " << minVal << endl;
-   cout << "max val: " << maxVal << endl;
-
-   //*/
 }
 
-void MarkerDetector_impl::parallelThreshold(const cv::Mat& raw, cv::Mat& edges, int nThreads) {
 
-  edges.create(raw.rows, raw.cols, CV_8UC1);
-
-  // divide the image in N horizontal slices and process them
-  int sliceH = floor((float) raw.rows / nThreads);
-
-  thread t[nThreads];
-
-  for (int i = 0; i < nThreads; ++i) {
-    Rect roi(0, i * sliceH, raw.cols, sliceH);
-
-    t[i] = thread(adaptiveThreshold, raw(roi), edges(roi), 255,
-        ADAPTIVE_THRESH_MEAN_C,
-        THRESH_BINARY_INV, 7, 7);
-  }
-
-  // in the meanwhile compute the correct junction bands
-
-  Mat tmpM[nThreads - 1];
-
-  for (int i = 0; i < nThreads - 1; ++i) {
-    Rect roi(0, (i + 1) * sliceH, raw.cols, 12);
-    tmpM[i].create(12, raw.cols, CV_8UC1);
-
-    adaptiveThreshold(raw(roi), tmpM[i], 255, ADAPTIVE_THRESH_MEAN_C,
-        THRESH_BINARY_INV, 7, 7);
-  }
-
-  // wait for threads to finish
-  for (int i = 0; i < nThreads; ++i) {
-    t[i].join();
-  }
-
-  // overwrite
-  for (int i = 0; i < nThreads - 1; ++i) {
-    Rect roi(0, (i + 1) * sliceH, raw.cols, 12);
-    edges(roi) = tmpM[i];
-  }
-}
-
+/*
+ * Contours detection is done with openCV method
+ *
+ */
 void MarkerDetector_impl::detectContours(const Mat &edges, Contours &ctrs) {
   ctrs.clear();
   findContours(edges, ctrs, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, Point(0, 0));
 }
 
+/*
+ * This method filters coutours who looks like circles (approx. round)
+ *
+ */
 void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
 
   out.clear();
@@ -346,7 +291,6 @@ void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
     cy /= c.size();
 
     // compute average and std of distance
-
     float sumd = 0, sumd2 = 0, d2;
     for (auto it = c.begin(); it != c.end(); ++it) {
       d2 = pow(it->x - cx, 2) + pow(it->y - cy, 2);
@@ -367,6 +311,12 @@ void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
   }
 }
 
+
+/*
+ * This method associate concentric circles into clusters
+ * Best match is computed by center proximity and circle radius ratio (as declared in config)
+ *
+ */
 void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCluster> &out) {
 
   // for each circle, do a cluster with the best matching inner circle, if found
@@ -403,6 +353,12 @@ void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCl
 
 }
 
+/*
+ * For each cluster, this method compares signal with reference signal
+ * Cluster having maximal correlation score selected and theta value (angle between ref and signal is computed)
+ * returned values are selectedCluster and theta pointers
+ *
+ */
 bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidates, const vector<int> &representativesIds, int &selectedCluster, float & theta) {
 
   bool found = false;
@@ -429,50 +385,27 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
     if (M > maxCorr) {
       maxCorr = M;
       // compute theta
-//      theta = -1.0 / c.r * MLoc.x;
       theta = +M_PI - (float) MLoc.x / signal.size() * 2.0 * M_PI;
 
       found = true;
       selectedCluster = it;
     }
-
-//    cerr << M << endl;
   }
 
   return found;
 }
 
-bool MarkerDetector_impl::findConcentricCircles(const Circles &circles, const CircleCluster &cluster, int &innerCircle) {
-
-  float repRadius = circles[cluster.rep].r;
-  float searchedRadius = repRadius * _cfg.markerInnerDiameter
-      / _cfg.markerDiameter;
-
-  innerCircle = 0;
-  float diff = numeric_limits<float>::infinity();
-
-  // search the circle in the cluster for which the radius is nearest wrt searchedRadius
-  for (auto it = cluster.circleIds.begin(); it != cluster.circleIds.end(); ++it) {
-    float d = fabs(circles[*it].r - searchedRadius);
-    if (d < diff) {
-      innerCircle = *it;
-      diff = d;
-    }
-  }
-
-  bool found = true;
-  if (fabs((circles[innerCircle].r - searchedRadius) / searchedRadius) > 0.25) {
-    cerr << "WARNING, inner circle possibly wrong" << endl;
-    found = false;
-  }
-
-  return found;
-}
-
+/*
+ * Calling openCV to get an ellipse from contours
+ */
 void MarkerDetector_impl::fitEllipse(const Contour& cnt, Ellipse& out) {
   out = cv::fitEllipse(cnt);
 }
 
+/*
+ * Normalize signal between -1 and 1 after computing signal min and max value
+ *
+ */
 void MarkerDetector_impl::normalizeSignal(std::vector<float>& sig_in) {
   // depolarize
   Mat sig(1, sig_in.size(), CV_32FC1, sig_in.data());
@@ -499,6 +432,10 @@ void MarkerDetector_impl::normalizeSignal(std::vector<float>& sig_in) {
   }
 }
 
+/*
+ * computeNormalizedxCorr compares reference signal with picture's target signal
+ * Give back out matrice with diff between ref and signal.
+ */
 void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_in, Mat &out) {
 
   // prepare signals
@@ -516,53 +453,52 @@ void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_i
           val = -val;
         }
       }
-
       raw[k + n * sig_in.size()] = val;
     }
   }
 
   Mat ref(1, 2 * sig_in.size(), CV_32FC1, raw);
-
   Mat sig(1, sig_in.size(), CV_32FC1, const_cast<float *>(sig_in.data()));
 
-// compute cross correlation
+  // compute cross correlation
   matchTemplate(ref, sig, out, CV_TM_CCORR_NORMED);
 }
 
+
+/*
+ * Get signal along a circle (given the circle and signal radius)
+ *
+ */
 void MarkerDetector_impl::getSignalInsideCircle(const Mat& image, const Circle& circle, float radiusPercentage, std::vector<float>& signal) {
 
   int N = ceil(2 * M_PI / (1.0 / circle.r));
-//  int N = 360;
 
   signal.clear();
   signal.reserve(N);
-//  signal.reserve(180);
 
   Mat px;
   float theta = -M_PI;
 
-//  while (theta < M_PI) {
   for (int i = 0; i < N; ++i) {
-    unsigned int x = round(
-        circle.center.x + cos(theta) * circle.r * radiusPercentage);
-    unsigned int y = round(
-        circle.center.y + sin(theta) * circle.r * radiusPercentage);
+    unsigned int x = round(circle.center.x + cos(theta) * circle.r * radiusPercentage);
+    unsigned int y = round(circle.center.y + sin(theta) * circle.r * radiusPercentage);
 
     Scalar intensity = image.at<uchar>(y, x);
     signal.push_back(intensity[0]);
-
-//    theta += 1.0 / circle.r;
-//    theta += M_PI/90.0;
 
     theta += (2.0 * M_PI) / N;
   }
 }
 
+
+/*
+ * Get signal along an ellipse (given ellipse)
+ *
+ */
 void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image, const Ellipse& ellipse, float radiusPercentage, std::vector<float>& signal,
                                                 float &increment, float thetasmall, float thetabig, vector<Point2f> *pts) {
 
-  increment = 1.0
-      / ((ellipse.size.width / 2.0 + ellipse.size.height / 2.0) / 2.0);
+  increment = 1.0 / ((ellipse.size.width / 2.0 + ellipse.size.height / 2.0) / 2.0);
 
   int N = ceil((thetabig - thetasmall) / increment);
 
@@ -575,7 +511,6 @@ void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image, const Ellipse
   }
 
   Mat px;
-
   float theta = thetasmall;
 
   for (int i = 0; i < N; ++i, theta += increment) {
@@ -593,6 +528,11 @@ void MarkerDetector_impl::getSignalInsideEllipse(const Mat& image, const Ellipse
   }
 }
 
+
+/*
+ * Get X/Y coordinate of a point on an ellipse (determined by center, a & b radiuses) at a specified phi angle
+ *
+ */
 Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a, float b, float phi) {
 
   float offset = 0.0;
@@ -603,14 +543,16 @@ Point2f MarkerDetector_impl::evalEllipse(float at, const Point2f& c, float a, fl
 
   Point2f ret;
 
-  ret.x = c.x + a * cos(at - phi + offset - M_PI) * cos(phi + offset)
-      - b * sin(at - phi + offset - M_PI) * sin(phi + offset);
-  ret.y = c.y + a * cos(at - phi + offset - M_PI) * sin(phi + offset)
-      + b * sin(at - phi + offset - M_PI) * cos(phi + offset);
+  ret.x = c.x + a * cos(at - phi + offset - M_PI) * cos(phi + offset) - b * sin(at - phi + offset - M_PI) * sin(phi + offset);
+  ret.y = c.y + a * cos(at - phi + offset - M_PI) * sin(phi + offset) + b * sin(at - phi + offset - M_PI) * cos(phi + offset);
 
   return ret;
 }
 
+/*
+ * Compute distance between Camera and target
+ *
+ */
 void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &mu, double &std, int N) {
 
   Point2d p1, p2;
@@ -640,8 +582,7 @@ void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps, const 
     th1 = acos((vr1 / vr1.norm()).dot(vrc / vrc.norm()));
     th2 = acos((vr2 / vr2.norm()).dot(vrc / vrc.norm()));
 
-    double curd = (sqrt(2) * r * sin(th1 + th2))
-        / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
+    double curd = (sqrt(2) * r * sin(th1 + th2)) / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
 
     sum += curd;
     sumsq += pow(curd, 2);
@@ -655,6 +596,10 @@ void MarkerDetector_impl::getDistanceGivenCenter(const EllipsePoly& elps, const 
   }
 }
 
+/*
+ * Computes camera angular position from camera parameters and target rotation
+ * (I think we don't need this)
+ */
 void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::Point2d& c, double r, double &d, double &phi, double &kappa) {
   Point2d p1, p2;
   Eigen::Vector3d vr1, vr2, vrc;
@@ -691,8 +636,7 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
   th1 = acos((vr1 / vr1.norm()).dot(vrc / vrc.norm()));
   th2 = acos((vr2 / vr2.norm()).dot(vrc / vrc.norm()));
 
-  d = (sqrt(2) * r * sin(th1 + th2))
-      / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
+  d = (sqrt(2) * r * sin(th1 + th2)) / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
 
   G1(0) = G1(1) = asin(d / r * sin(th1));
   G1(2) = G1(3) = M_PI - G1(0);
@@ -702,8 +646,6 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
 
   res = G1 + B2 + th1 + th2 - M_PI;
   ad = res.abs().minCoeff(&i);
-
-//  cerr << "anglediff: " << res.transpose() << endl;
 
   if (ad > 1e-6) {
     cerr << "WARNING, geometrical inconsistence: " << ad << endl;
@@ -715,9 +657,6 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
   OB = r * sin(M_PI - beta2 - th2) / sin(th2);
   CB_phi = OB * vr2 - d * vrc;
   phi = atan2(CB_phi(1), CB_phi(2));
-
-//  cerr << CB_phi.transpose() << " ("
-//      << sqrt(pow(CB_phi(1), 2) + pow(CB_phi(2), 2)) << ") " << d << endl;
 
   // AROUND Y AXIS
   theta = 0.0;
@@ -736,8 +675,7 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
   th1 = acos((vr1 / vr1.norm()).dot(vrc / vrc.norm()));
   th2 = acos((vr2 / vr2.norm()).dot(vrc / vrc.norm()));
 
-  d = (sqrt(2) * r * sin(th1 + th2))
-      / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
+  d = (sqrt(2) * r * sin(th1 + th2)) / sqrt(3 - 2 * cos(2 * th1) - 2 * cos(2 * th2) + cos(2 * (th1 + th2)));
 
   G1(0) = G1(1) = asin(d / r * sin(th1));
   G1(2) = G1(3) = M_PI - G1(0);
@@ -747,8 +685,6 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
 
   res = G1 + B2 + th1 + th2 - M_PI;
   ad = res.abs().minCoeff(&i);
-
-//  cerr << "anglediff: " << res.transpose() << endl;
 
   if (ad > 1e-6) {
     cerr << "WARNING, geometrical inconsistence: " << ad << endl;
@@ -760,29 +696,16 @@ void MarkerDetector_impl::getPoseGivenCenter(const EllipsePoly& elps, const cv::
   OB = r * sin(M_PI - beta2 - th2) / sin(th2);
   CB_kappa = OB * vr2 - d * vrc;
   kappa = atan2(CB_kappa(0), CB_kappa(2));
-
-//  cerr << CB_kappa.transpose() << " ("
-//      << sqrt(pow(CB_kappa(0), 2) + pow(CB_kappa(2), 2)) << ") " << d << endl;
-
 }
+
 
 double MarkerDetector_impl::evalDistanceF(const EllipsePoly &outer, const EllipsePoly &inner, const cv::Point2d &x, const cv::Point2d &x0) {
 
   double mu, std;
-
   double ret;
 
   getDistanceGivenCenter(outer, x, _cfg.markerDiameter / 2.0, mu, std, 4);
   ret = std;
-
-//  getDistanceGivenCenter(inner, x, _cfg.markerInnerDiameter / 2.0, mu, std);
-//  ret += std;
-
-  // regularization
-
-//  float d0 = sqrt(pow(x.x - x0.x, 2) + pow(x.y - x0.y, 2));
-//  ret += 10 * exp(-pow(d0 - 10, 2) / pow(0.75, 2));
-
   ret += 0.1 * (pow(x.x - x0.x, 2) + pow(x.y - x0.y, 2));
 
   return ret;
@@ -852,6 +775,11 @@ void MarkerDetector_impl::getDistanceWithGradientDescent(const EllipsePoly& oute
   }
 }
 
+
+/*
+ * Subpixel edge detection
+ *
+ */ 
 void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, const Ellipse &elps, const EllipsePoly &poly, float theta, 
                                                         float a, float b, cv::Point2f &subpixedge, int N) {
 
@@ -890,8 +818,6 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
     orth[i + N].y = e.y + (float) (i + maxDeltaI) * sin(g);
 
     subpixvalues[i + N] = getSubpix(image, orth[i + N]);
-
-//    cerr << subpixvalues[i + N] << endl;
   }
 
   // swap them in case order is inverted
@@ -905,13 +831,9 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
 
   // toggle local limits estimation if not provided
   if (a < 0) {
-    a = getSubpix(image,
-        Point2f(e.x + (float) (-(N + 1) + maxDeltaI) * cos(g),
-            e.y + (float) (-(N + 1) + maxDeltaI) * sin(g)));
+    a = getSubpix(image, Point2f(e.x + (float) (-(N + 1) + maxDeltaI) * cos(g), e.y + (float) (-(N + 1) + maxDeltaI) * sin(g)));
 
-    b = getSubpix(image,
-        Point2f(e.x + (float) (N + 1 + maxDeltaI) * cos(g),
-            e.y + (float) (N + 1 + maxDeltaI) * sin(g)));
+    b = getSubpix(image, Point2f(e.x + (float) (N + 1 + maxDeltaI) * cos(g),  e.y + (float) (N + 1 + maxDeltaI) * sin(g)));
 
     if (swapmult == -1.0) {
       swap(a, b);
@@ -951,17 +873,11 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
 
       // TODO: they could be optimized
       // derivative with respect to mu
-      H(i + N, 0) = (b * (-mu + y) * Sign(mu - y))
-          / (exp((2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2)))
-              * sqrt(
-                  1.0 - exp((-2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2))))
-              * M_PI * pow(sigma, 2));
+      H(i + N, 0) = (b * (-mu + y) * Sign(mu - y)) / (exp((2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2))) 
+                    * sqrt(1.0 - exp((-2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2))))  * M_PI * pow(sigma, 2));
       // derivative with respect to sigma
-      H(i + N, 1) = sigma * (b * pow(mu - y, 2) * Sign(mu - y))
-          / (exp((2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2)))
-              * sqrt(
-                  1.0 - exp((-2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2))))
-              * M_PI * pow(sigma, 3));
+      H(i + N, 1) = sigma * (b * pow(mu - y, 2) * Sign(mu - y)) / (exp((2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2)))
+              * sqrt(1.0 - exp((-2.0 * pow(mu - y, 2)) / (M_PI * pow(sigma, 2)))) * M_PI * pow(sigma, 3));
     }
 
     dx = (H.transpose() * H).inverse() * H.transpose() * err;
@@ -971,11 +887,13 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
 
   } while (fabs(dx(0)) > 1e-2 && it <= 5);
 
-  subpixedge = e
-      + Point2f((swapmult * mu + maxDeltaI) * cos(g),
-          (swapmult * mu + maxDeltaI) * sin(g));
+  subpixedge = e  + Point2f((swapmult * mu + maxDeltaI) * cos(g), (swapmult * mu + maxDeltaI) * sin(g));
 }
 
+/*
+ * Refines a ellipse contours with subpixel edges
+ *
+ */
 void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image, const Target &tg, const Ellipse &elps, bool ignoreSignalAreas, 
                                                             int N, std::vector<cv::Point2f> &cnt, std::vector<double> &angles) {
 
@@ -995,30 +913,19 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
   float theta = 0.0;
   float val = _cfg.markerSignalStartsWith;
   int segment = 0;
-
-//  float maxPSFwidth = 1.0;
-//  float safetyAngle = maxPSFwidth / elpsSize
-//      / _cfg.markerSignalRadiusPercentage; // to avoid getting the white dots
   float safetyAngle = 1 / elpsSize;
 
   while (theta < 2 * M_PI) {
     bool considerThisAngle = !ignoreSignalAreas;
 
-    if (segment < _cfg.markerSignalModel.size()
-        && theta > 2 * M_PI * _cfg.markerSignalModel[segment]) {
+    if (segment < _cfg.markerSignalModel.size() && theta > 2 * M_PI * _cfg.markerSignalModel[segment]) {
       ++segment;
       val = -val;
     }
     if (val == -1.0) {
-      float minAngle =
-          2 * M_PI
-              * _cfg.markerSignalModel[(segment - 1)
-                  % _cfg.markerSignalModel.size()]
-              + safetyAngle;
-      float maxAngle = 2 * M_PI
-          * _cfg.markerSignalModel[(segment) % _cfg.markerSignalModel.size()]
-          - safetyAngle
-          + (segment >= _cfg.markerSignalModel.size() ? 2 * M_PI : 0);
+      float minAngle = 2 * M_PI * _cfg.markerSignalModel[(segment - 1)  % _cfg.markerSignalModel.size()]  + safetyAngle;
+      float maxAngle = 2 * M_PI * _cfg.markerSignalModel[(segment) % _cfg.markerSignalModel.size()] - safetyAngle
+                       + (segment >= _cfg.markerSignalModel.size() ? 2 * M_PI : 0);
 
       if (theta >= minAngle && theta <= maxAngle) {
         considerThisAngle = true;
@@ -1027,12 +934,9 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
 
     if (considerThisAngle) {
       Point2f edge;
-      //  subpixelEdgeWithLeastSquares(image, elps, elpsPoly, heading + theta,
-      //      black, white - black, edge, N);
 
       // disable exposure hint
-      subpixelEdgeWithLeastSquares(image, elps, elpsPoly, tg.heading + theta,
-          -1, -1, edge, N);
+      subpixelEdgeWithLeastSquares(image, elps, elpsPoly, tg.heading + theta, -1, -1, edge, N);
 
       if (!isnan(edge.x) && !isnan(edge.y)) {
         cnt.push_back(edge);
@@ -1044,6 +948,10 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
   }
 }
 
+/*
+ *
+ * MWE : le floodfill est-il vraiment utile ?
+ */
 bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Target> tg) {
 
   if (!tg->detected) {
@@ -1119,7 +1027,6 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
   }
 
   // compute centroids employing the bounds regions
-
   for (unsigned int i = 0; i < NPTS; ++i) {
     if (bounds[i].width == 0 || bounds[i].height == 0) {
       pointsFound = false; // I need to keep on to finish uncolouring the mask
@@ -1135,21 +1042,11 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
             // clear this mask point
             _floodfillMask.at<unsigned char>(y + 1, x + 1) = 0;
 
-            // weighted average
+            // weighted average (MWE : vérifier que c'est bien le blanc qui a une valeur élevée)
             cnt[i] += image.at<unsigned char>(y, x);
 
             tg->codePoints[i].x += image.at<unsigned char>(y, x) * x;
             tg->codePoints[i].y += image.at<unsigned char>(y, x) * y;
-            //*/
-
-            /* simple average
-             cnt[i]++;
-
-             tg->codePoints[i].x += x;
-             tg->codePoints[i].y += y;
-             //*/
-
-            // const_cast<Mat &>(image).at<unsigned char>(y, x) = 0;
           }
         }
       }
@@ -1172,26 +1069,18 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
 
     // solve the PnP problem
     Mat rod;
-    solvePnP(_worldPoints, tg->codePoints, _cfg.K, _cfg.distortion, rod,
-        tg->rought);
+    solvePnP(_worldPoints, tg->codePoints, _cfg.K, _cfg.distortion, rod, tg->rought);
     Rodrigues(rod, tg->roughR);
 
     // reproject points and compute error
-
-    projectPoints(_worldPoints, rod, tg->rought, _cfg.K, _cfg.distortion,
-        prj_points);
-
+    projectPoints(_worldPoints, rod, tg->rought, _cfg.K, _cfg.distortion, prj_points);
     tg->meanReprojectionError = 0;
 
     for (unsigned int i = 0; i < NPTS; i++) {
-      float err = sqrt(
-          pow(prj_points[i].x - tg->codePoints[i].x, 2)
-              + pow(prj_points[i].y - tg->codePoints[i].y, 2));
+      float err = sqrt(pow(prj_points[i].x - tg->codePoints[i].x, 2) + pow(prj_points[i].y - tg->codePoints[i].y, 2));
 
       if (err > 5) {
-        cerr << "WARNING, high reprojection error " << i << "-th code point: "
-            << err << endl;
-
+        cerr << "WARNING, high reprojection error " << i << "-th code point: "  << err << endl;
         success = false;
       }
       tg->meanReprojectionError += err;
@@ -1206,25 +1095,15 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
     tg->roughlyMeasured = true;
   }
 
-  /* check that the mask is completely black
-   for (int x = 1; x < floodfillMask.cols - 1; ++x) {
-   for (int y = 1; y < floodfillMask.rows - 1; ++y) {
-   if (floodfillMask.at<unsigned char>(y, x) != 0) {
-   namedWindow("mask");
-   imshow("mask", floodfillMask);
-   waitKey(-1);
-   assert(false);
-   }
-   }
-   }
-   */
-
   return success;
 }
 
+/*
+ * Apply camera lens distorting to position correctly a point as if lens was perfect.
+ *
+ */
 Point2f MarkerDetector_impl::distort(const Point2f& p) {
   // To relative coordinates <- this is the step you are missing.
-
   double cx = _cfg.K.at<double>(0, 2);
   double cy = _cfg.K.at<double>(1, 2);
   double fx = _cfg.K.at<double>(0, 0);
@@ -1255,39 +1134,10 @@ Point2f MarkerDetector_impl::distort(const Point2f& p) {
   return Point2f(xDistort, yDistort);
 }
 
-
-void MarkerDetector_impl::getEllipseMatrix(const Ellipse &elps, Eigen::Matrix3d &Q) {
-
-  double a, b, cx, cy, theta;
-
-  a = elps.size.width / 2;
-  b = elps.size.height / 2;
-  theta = elps.angle * M_PI / 180.0;
-
-  cx = elps.center.x;
-  cy = elps.center.y;
-
-  if (a < b) {
-    theta += M_PI / 2.0;
-    std::swap(a, b);
-  }
-
-// Compute elements of conic matrix
-
-  double A, B, C, D, E, F;
-
-  A = pow(a, 2) * pow(sin(theta), 2) + pow(b, 2) * pow(cos(theta), 2);
-  B = 2 * (pow(b, 2) - pow(a, 2)) * sin(theta) * cos(theta);
-  C = pow(a, 2) * pow(cos(theta), 2) + pow(b, 2) * pow(sin(theta), 2);
-  D = -2 * A * cx - B * cy;
-  E = -B * cx - 2 * C * cy;
-  F = A * pow(cx, 2) + B * cx * cy + C * pow(cy, 2) - pow(a, 2) * pow(b, 2);
-
-// Store into Q
-  Q << A, B / 2.0, D / 2.0, B / 2.0, C, E / 2.0, D / 2.0, E / 2.0, F;
-
-}
-
+/*
+ * Computes polynomial parameters defining an ellipse
+ *
+ */
 void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps, EllipsePoly &poly) {
   double a, b, cx, cy, theta;
 
@@ -1303,8 +1153,7 @@ void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps, Ellipse
     std::swap(a, b);
   }
 
-// Compute elements of conic matrix
-
+  // Compute elements of conic matrix
   double A, B, C, D, E, F;
 
   A = pow(a, 2) * pow(sin(theta), 2) + pow(b, 2) * pow(cos(theta), 2);
@@ -1314,39 +1163,29 @@ void MarkerDetector_impl::getEllipsePolynomialCoeff(const Ellipse &elps, Ellipse
   E = -B * cx - 2 * C * cy;
   F = A * pow(cx, 2) + B * cx * cy + C * pow(cy, 2) - pow(a, 2) * pow(b, 2);
 
-  double k =
-      1.0
-          / sqrt(
-              (pow(A, 2) + pow(B, 2) + pow(C, 2) + pow(D, 2) + pow(E, 2)
-                  + pow(F, 2)));
+  double k = 1.0 / sqrt((pow(A, 2) + pow(B, 2) + pow(C, 2) + pow(D, 2) + pow(E, 2) + pow(F, 2)));
 
   poly << A, B, C, D, E, F;
   poly *= k;
 
 }
 
+/*
+ * Compute intersection points between a ellipse defined by its polynomial parameters 
+ * and a line defined by a center(x0/y0) and an angle.
+ *
+ * Points are set in p1 and p2 pointers
+ */
 void MarkerDetector_impl::getEllipseLineIntersections(const EllipsePoly& em, double x0, double y0, double theta, cv::Point2d& p1, cv::Point2d& p2) {
   Eigen::Vector3d lm;
 
   if (fabs(theta - M_PI / 2.0) < 1e-6) {
-
     p1.x = x0;
-    p1.y = (-(x0 * em(1)) - em(4)
-        - sqrt(
-            pow(x0 * em(1) + em(4), 2)
-                - 4 * em(2) * (pow(x0, 2) * em(0) + x0 * em(3) + em(5))))
-        / (2 * em(2));
+    p1.y = (-(x0 * em(1)) - em(4) - sqrt(pow(x0 * em(1) + em(4), 2) - 4 * em(2) * (pow(x0, 2) * em(0) + x0 * em(3) + em(5)))) / (2 * em(2));
     p2.x = x0;
-    p2.y = (-(x0 * em(1)) - em(4)
-        + sqrt(
-            pow(x0 * em(1) + em(4), 2)
-                - 4 * em(2) * (pow(x0, 2) * em(0) + x0 * em(3) + em(5))))
-        / (2 * em(2));
-
+    p2.y = (-(x0 * em(1)) - em(4) + sqrt(pow(x0 * em(1) + em(4), 2) - 4 * em(2) * (pow(x0, 2) * em(0) + x0 * em(3) + em(5)))) / (2 * em(2));
   } else {
     lm << -tan(theta), 1.0, tan(theta) * x0 - y0;
-
-#   include "generated/EllipseLineIntersection.cpp"
   }
 }
 }
