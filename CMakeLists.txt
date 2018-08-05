@@ -56,3 +56,6 @@ target_link_libraries(batchdetector visiona)
 
 add_executable(simpledetector src/simpledetector.cpp)
 target_link_libraries(simpledetector visiona)
+
+add_executable(testdetector src/testdetector.cpp)
+target_link_libraries(testdetector visiona) 
