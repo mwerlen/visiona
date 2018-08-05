@@ -52,7 +52,7 @@ class Target:
                     signal.append(center - angle)
                     signal.append(center + angle)
         signal.sort()
-        return "[" + ",".join(map(str, signal)) + "]"
+        return "[" + ",".join(map("{0:1.5f}".format, signal)) + "]"
 
     def __repr__(self):
         return repr((self.target_id, self.sequence))
