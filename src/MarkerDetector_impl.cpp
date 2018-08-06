@@ -103,24 +103,34 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inne
   Contours ctr;
   detectContours(edges, ctr);
 
+  cout << "Nombre de contours : " << ctr.size() << endl;
+
   Circles circles;
   filterContours(ctr, circles);
+
+  cout << "Nombre de cercles : " << circles.size() << endl;
 
   std::vector<CircleCluster> clusters;
   clusterCircles(circles, clusters);
 
+  cout << "Nombre de clusters : " << clusters.size() << endl;
+
   bool found = false;
 
-  if (circles.size() > 0) {
+  if (clusters.size() > 0) {
     // Select marker among the cluster representatives
     std::vector<int> representatives;
     for (auto it = clusters.begin(); it != clusters.end(); ++it) {
       representatives.push_back(it->rep);
+      cout << "Cluster (";
+      for (int i = 0; i < it->circleIds.size(); i++) {
+        cout << it->circleIds[i] << ",";
+      }
+      cout << ") - center x:" << it->center.x << " y:" << it->center.y << endl;
     }
 
     int selectedCluster;
-    found = selectMarker(raw, circles, representatives, selectedCluster,
-        heading);
+    found = selectMarker(raw, circles, representatives, selectedCluster, heading);
 
     if (found) {
       // in which we have exactly two circles per cluster
@@ -299,8 +309,12 @@ void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
     }
 
     float rMean = sumd / c.size();
-    float rStd = sqrt(
-        c.size() * (sumd2 / c.size() - pow(rMean, 2)) / (c.size() - 1));
+    float rStd = sqrt(c.size() * (sumd2 / c.size() - pow(rMean, 2)) / (c.size() - 1));
+
+    if (cx > 1700 and cx < 2000 and cy > 2100 and cy < 2500 and c.size() > 1000) {
+        cout << "Big contour - center x:" << cx << " - y:" << cy << " - mean radius:" << rMean << " - rStd:" << rStd << " - size:" << c.size() << " - ratio std/mmean:" << (rStd / rMean) << endl;
+    }
+
 
     // Attempt to have a metric that adapts to depth
     if ((rStd / rMean) < 0.075) {
@@ -320,17 +334,18 @@ void MarkerDetector_impl::filterContours(const Contours& in, Circles& out) {
 void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCluster> &out) {
 
   // for each circle, do a cluster with the best matching inner circle, if found
-
   float radiusRatio = _cfg.markerInnerDiameter / _cfg.markerDiameter;
 
   for (int i = 0; i < in.size(); ++i) {
+    cout << "Clustering circle #" << i << endl;
+    cout << " - center x: " << in[i].center.x << " - y: " << in[i].center.y << endl;
+    cout << " - radius: " << in[i].r << endl;
 
     int bestMatch = -1;
     float bestDiff = numeric_limits<float>::infinity();
 
     for (int j = 0; j < in.size(); ++j) {
-      if (in[i].r > in[j].r
-          && norm(in[i].center - in[j].center) < in[i].r * 0.5) {
+      if (in[i].r > in[j].r  && norm(in[i].center - in[j].center) < in[i].r * 0.5) {
         float curDiff = fabs(in[i].r * radiusRatio - in[j].r);
 
         if (curDiff < bestDiff) {
@@ -368,12 +383,20 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
   for (auto it = 0; it < representativesIds.size(); ++it) {
 
     const Circle &c = candidates[representativesIds[it]];
+    
+    cout << "Circle #" << representativesIds[it] << endl;
 
     vector<float> signal;
     getSignalInsideCircle(image, c, _cfg.markerSignalRadiusPercentage, signal);
 
     normalizeSignal(signal);
-
+    
+    //cout << "Signal : ";
+    //for (int i=0; i < signal.size(); i++) {
+    //  cout << signal[i] << ",";
+    //}
+    //cout << endl;
+    
     Mat corr;
     computeNormalizedxCorr(signal, corr);
 
@@ -381,6 +404,8 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
     Point2i mLoc, MLoc;
 
     minMaxLoc(corr, &m, &M, &mLoc, &MLoc);
+
+    cout << "Max correlation:" << M << "(threshold: " << maxCorr << ")" << endl;
 
     if (M > maxCorr) {
       maxCorr = M;
