@@ -1042,7 +1042,7 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
             // clear this mask point
             _floodfillMask.at<unsigned char>(y + 1, x + 1) = 0;
 
-            // weighted average (MWE : vérifier que c'est bien le blanc qui a une valeur élevée)
+            // weighted average
             cnt[i] += image.at<unsigned char>(y, x);
 
             tg->codePoints[i].x += image.at<unsigned char>(y, x) * x;

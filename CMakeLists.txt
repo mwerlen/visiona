@@ -11,7 +11,7 @@ set(CMAKE_ENABLE_EXPORTS True)
 set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -o3 ${OTHERS_DEFINE} -static-libgcc -static-libstdc++")
+set(CMAKE_CXX_FLAGS "-std=c++11 -o3 -ggdb ${OTHERS_DEFINE} -static-libgcc -static-libstdc++")
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 #Static Libs
