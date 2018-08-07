@@ -53,7 +53,7 @@ MarkerDetectorConfig::MarkerDetectorConfig() :
 
   contourFilterMinSize = 17;
 
-  markerxCorrThreshold = 0.70;
+  markerxCorrThreshold = 0.60;
 
   /* -------------- marker used in MOIA --------------
 

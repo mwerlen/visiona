@@ -97,9 +97,6 @@ int main(int argc, char *argv[]) {
   static struct option long_options[] = {
       { "path", required_argument, 0, 'p' },
       { "ext", required_argument, 0, 'e' },
-      { "start-frame", required_argument, 0, 's' },
-      { "stop-frame", required_argument, 0, 't' },
-      { "only-frame", required_argument, 0, 'o' },
       { "wait", no_argument, 0, 'w' },
       { "config", required_argument, 0, 'c' },
       { "debug", no_argument, 0, 'd' },
@@ -111,7 +108,6 @@ int main(int argc, char *argv[]) {
   unsigned int optionflag = 0;
   char *imagePath, *imgext, *configpath, *prefix, *detectioncfgpath,
       *seedpointspath;
-  long int startFrom = 0, stopAt = -1, onlyFrame;
 
   opterr = 0;
   int c;
@@ -129,17 +125,6 @@ int main(int argc, char *argv[]) {
     case 'e':
       imgext = optarg;
       optionflag |= OPTEXTSET;
-      break;
-    case 's':
-      startFrom = atoi(optarg);
-      break;
-    case 't':
-      stopAt = atoi(optarg);
-      optionflag |= OPTSTOPAT;
-      break;
-    case 'o':
-      onlyFrame = atoi(optarg);
-      optionflag |= OPTONLYONEFRAME;
       break;
     case 'w':
       optionflag |= OPTWAITKEYPRESS;
@@ -164,6 +149,7 @@ int main(int argc, char *argv[]) {
       return 1;
 
     default:
+      cerr << "Fuck !" << endl;
       abort();
     }
   }
@@ -237,22 +223,10 @@ int main(int argc, char *argv[]) {
 
       int sep = fname.find(fn_prefix);
       if (sep != string::npos) {
-        stringstream s(fname.substr(sep + fn_prefix.length(), 16));
+        stringstream s(fname.substr(sep + fn_prefix.length(), 2));
 
         unsigned int frame;
         s >> frame;
-
-        if ((optionflag & OPTONLYONEFRAME) && frame != onlyFrame) {
-          continue;
-        }
-
-        if (frame < startFrom) {
-          continue;
-        }
-
-        if ((optionflag & OPTSTOPAT) && frame > stopAt) {
-          continue;
-        }
 
         images.push_back(ImageDesc(fname, frame));
       }
@@ -295,13 +269,13 @@ int main(int argc, char *argv[]) {
       dbg->windowName = "Debug";
 
       dbg->blitSubRegion = true;
-      dbg->blitRegionWidthMultiplier = 3.0;
+      dbg->blitRegionWidthMultiplier = 17.0;
 
       dbg->enabled = true;
-      dbg->enableCirclesClusters = false;
-      dbg->enableSelectedTargets = false;
-      dbg->enableEsposure = false;
-      dbg->enableRoughMeasure = false;
+      dbg->enableCirclesClusters = true;
+      dbg->enableSelectedTargets = true;
+      dbg->enableEsposure = true;
+      dbg->enableRoughMeasure = true;
       dbg->enableSubPixelEllipses = true;
 
       dbg->frameNumber = it->frameNumber;
@@ -351,6 +325,8 @@ int main(int argc, char *argv[]) {
     // TODO: introduce a flag to enable/disable this
 
     if (tg->roughlyMeasured) {
+
+        cout << "Target detected x:" << tg->inner.center.x << " y:" << tg->inner.center.y << endl;
 
       for (int i = 0; i < cfg.markerSignalModel.size() / 2; ++i) {
         double x = tg->codePoints[i].x, y = tg->codePoints[i].y;
