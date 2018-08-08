@@ -186,8 +186,8 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> 
   Point2d center;
   getDistanceWithGradientDescent(outerPoly, innerPoly, outerElps.center, 1e-6, 1e-2, center, 1e-8, 0);
 
-  // compute distance
-  getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, tg->distance, tg->phi, tg->kappa);
+  // compute distance (MWE : disabled this part, not necessary)
+  // getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, tg->distance, tg->phi, tg->kappa);
 
   // get the center in the distorted image
   center = distort(center);

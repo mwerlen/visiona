@@ -33,6 +33,9 @@
  *
  *  Created on: May 13, 2015
  *      Author: Davide A. Cucci (davide.cucci@epfl.ch)
+ *
+ *  Edited on: Aug. 2018
+ *      By Maxime Werlen
  */
 
 #include <fstream>
@@ -42,9 +45,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <getopt.h>
-
 #include "opencv2/highgui/highgui.hpp"
-
 #include <libconfig.h++>
 
 #include "Visiona.h"
@@ -56,38 +57,10 @@ using namespace visiona;
 
 #define OPTPATHSET 1
 #define OPTEXTSET 2
-#define OPTONLYONEFRAME 4
-#define OPTCFGFILESET 8
-#define OPTDEBUG 16
-#define OPTWAITKEYPRESS 32
-#define OPTSTOPAT 64
-#define OPTPREFIXSET 128
-#define OPTSKIPDETECTION 256
-#define OPTUSESEEDPOINTS 512
-
-struct ImageDesc {
-    string fileName;
-    long int frameNumber;
-
-    ImageDesc(const string &name, long int frame) :
-        fileName(name), frameNumber(frame) {
-    }
-
-    bool operator <(const ImageDesc & b) const {
-      return frameNumber < b.frameNumber;
-    }
-};
-
-void loadCircle(const Setting &points, Circle &out);
-
-template<typename PointType>
-void load2DPointVector(const Setting &points, vector<PointType> &v) {
-  int N = points.getLength();
-  for (int i = 0; i < N; ++i) {
-    PointType pt(points[i][0], points[i][1]);
-    v.push_back(pt);
-  }
-}
+#define OPTCFGFILESET 4
+#define OPTDEBUG 8
+#define OPTPREFIXSET 16
+#define OPTUSESEEDPOINTS 32 
 
 int main(int argc, char *argv[]) {
 
@@ -96,51 +69,29 @@ int main(int argc, char *argv[]) {
   static struct option long_options[] = {
       { "path", required_argument, 0, 'p' },
       { "ext", required_argument, 0, 'e' },
-      { "start-frame", required_argument, 0, 's' },
-      { "stop-frame", required_argument, 0, 't' },
-      { "only-frame", required_argument, 0, 'o' },
-      { "wait", no_argument, 0, 'w' },
       { "config", required_argument, 0, 'c' },
+      { "debug", no_argument, 0, 'd' },
       { "prefix", required_argument, 0, 'f' },
-      { "skip-detection", required_argument, 0, 'k' },
       { 0, 0, 0, 0 }
   };
 
   unsigned int optionflag = 0;
-  char *imagePath, *imgext, *configpath, *prefix, *detectioncfgpath,
-      *seedpointspath;
-  long int startFrom = 0, stopAt = -1, onlyFrame;
+  char *imagePath, *imgext, *configpath, *prefix, *detectioncfgpath, *seedpointspath;
 
   opterr = 0;
   int c;
   while ((c = getopt_long_only(argc, argv, "", long_options, NULL)) != -1) {
     switch (c) {
     case 'p':
-
       if (optarg[strlen(optarg) - 1] == '/') {
         optarg[strlen(optarg) - 1] = 0;
       }
-
       imagePath = optarg;
       optionflag |= OPTPATHSET;
       break;
     case 'e':
       imgext = optarg;
       optionflag |= OPTEXTSET;
-      break;
-    case 's':
-      startFrom = atoi(optarg);
-      break;
-    case 't':
-      stopAt = atoi(optarg);
-      optionflag |= OPTSTOPAT;
-      break;
-    case 'o':
-      onlyFrame = atoi(optarg);
-      optionflag |= OPTONLYONEFRAME;
-      break;
-    case 'w':
-      optionflag |= OPTWAITKEYPRESS;
       break;
     case 'c':
       configpath = optarg;
@@ -152,10 +103,6 @@ int main(int argc, char *argv[]) {
     case 'f':
       prefix = optarg;
       optionflag |= OPTPREFIXSET;
-      break;
-    case 'k':
-      detectioncfgpath = optarg;
-      optionflag |= OPTSKIPDETECTION;
       break;
     case '?':
       cerr << " * ERROR: unknown option or missing argument" << endl;
@@ -174,6 +121,10 @@ int main(int argc, char *argv[]) {
     cerr << " * ERROR: image extension not specified (-e)" << endl;
     return 1;
   }
+  if ((optionflag & OPTCFGFILESET) == 0) {
+    cerr << " * ERROR: config file not specified (-c)" << endl;
+    return 1;
+  }
 
   DIR *dir;
   if ((dir = opendir(imagePath)) == NULL) {
@@ -183,43 +134,17 @@ int main(int argc, char *argv[]) {
 
   // --------------------- configuration ---------------------------------------
 
+  // loading config
   MarkerDetectorConfig cfg;
-
-  if (optionflag & OPTCFGFILESET) {
-    if (!cfg.loadConfig(configpath)) {
-      return 1;
-    }
+  if (!cfg.loadConfig(configpath)) {
+    return 1;
   }
 
-  MarkerDetector *d = MarkerDetectorFactory::makeMarkerDetector(cfg);
-
-  shared_ptr<Target> tgfromcfg(new Target);
-
-  if (optionflag & OPTSKIPDETECTION) {
-    Config cfgfile;
-    try {
-      cfgfile.readFile(detectioncfgpath);
-    } catch (const FileIOException &fioex) {
-      cerr << " * ERROR: I/O error while reading " << detectioncfgpath << endl;
-      return false;
-    } catch (const ParseException &pex) {
-      cerr << " * ERROR: malformed cfg file at " << pex.getFile() << ":"
-          << pex.getLine() << " - " << pex.getError() << endl;
-      return false;
-    }
-
-    const Setting &root = cfgfile.getRoot();
-
-    tgfromcfg->detected = true;
-
-    loadCircle(root["OuterPoints"], tgfromcfg->outer);
-    loadCircle(root["InnerPoints"], tgfromcfg->inner);
-    load2DPointVector(root["SeedPoints"], tgfromcfg->seedPoints);
-  }
+  MarkerDetector *detector = MarkerDetectorFactory::makeMarkerDetector(cfg);
 
   // --------------------- generating image list -------------------------------
 
-  vector<ImageDesc> images;
+  vector<string> images;
 
   struct dirent *file;
 
@@ -235,71 +160,38 @@ int main(int argc, char *argv[]) {
 
       int sep = fname.find(fn_prefix);
       if (sep != string::npos) {
-        stringstream s(fname.substr(sep + fn_prefix.length(), 16));
-
-        unsigned int frame;
-        s >> frame;
-
-        if ((optionflag & OPTONLYONEFRAME) && frame != onlyFrame) {
-          continue;
-        }
-
-        if (frame < startFrom) {
-          continue;
-        }
-
-        if ((optionflag & OPTSTOPAT) && frame > stopAt) {
-          continue;
-        }
-
-        images.push_back(ImageDesc(fname, frame));
+        images.push_back(file->d_name);
       }
-
     }
   }
 
   closedir(dir);
 
-  sort(images.begin(), images.end());
-
   // --------------------- prepare output files --------------------------------
+  ofstream *output = new ofstream("output.log");
 
-  vector<ofstream *> imf;
-
-  for (int i = 0; i < cfg.markerSignalModel.size() / 2; ++i) {
-    stringstream s;
-    s << "CP" << fixed << setfill('0') << setw(2) << i << ".txt";
-
-    imf.push_back(new ofstream(s.str()));
-  }
+  cout << images.size() << " file(s) found." << endl;
 
   // --------------------- process every image ---------------------------------
+  for (int i = 0; i < images.size(); i++) {
+    string filename = images[i];
 
-  for (auto it = images.begin(); it != images.end(); ++it) {
+    cout << filename << " ..." << endl;
 
-    cerr << it->frameNumber << " - " << it->fileName << " ..." << endl;
-
-    string imgName = imagePath + string("/") + it->fileName;
+    string imgName = imagePath + string("/") + filename;
 
     Mat raw = imread(imgName, CV_LOAD_IMAGE_GRAYSCALE);
 
     // --- real detection proces starts here
+    shared_ptr<Target> target;
 
-    shared_ptr<Target> tg;
+    vector<shared_ptr<Target>> returnedValues = detector->detect(raw);
+    target = returnedValues[0];
 
-    if (optionflag & OPTSKIPDETECTION) {
-      tg = tgfromcfg;
-    } else {
-      vector<shared_ptr<Target>> ret = d->detect(raw);
-      tg = ret[0];
-    }
-
-    if (tg->detected) {
-      d->evaluateExposure(raw, tg);
-
-      d->measureRough(raw, tg);
-
-      d->measure(raw, tg);
+    if (target->detected) {
+      detector->evaluateExposure(raw, target);
+      detector->measureRough(raw, target);
+      detector->measure(raw, target);
     }
 
     // --- and ends here
@@ -308,48 +200,27 @@ int main(int argc, char *argv[]) {
 
     // TODO: introduce a flag to enable/disable this
 
-    if (tg->roughlyMeasured) {
+    if (target->roughlyMeasured) {
 
-      for (int i = 0; i < cfg.markerSignalModel.size() / 2; ++i) {
-        double x = tg->codePoints[i].x, y = tg->codePoints[i].y;
+      for (int j= 0; j < cfg.markerSignalModel.size() / 2; ++j) {
+        double x = target->codePoints[j].x, y = target->codePoints[j].y;
 
         // convert to photogrammetry convention
         // TODO: put an option
         if (true) {
           swap(x, y);
-          x = -(x - raw.rows / 2.0) * 4.7e-3;
+          x = -(x - raw.rows / 2.0) * 4.7e-3; // MWE : C'est quoi ce truc ?
           y = -(y - raw.cols / 2.0) * 4.7e-3;
         }
 
-        (*imf[i]) << it->fileName.substr(0, it->fileName.length() - 4) << " ";
-        (*imf[i]) << fixed << setprecision(6) << x << " ";
-        (*imf[i]) << fixed << setprecision(6) << y << endl;
-
-        imf[i]->flush();
+        *output << filename.substr(0, filename.length() - 4) << " -> x:";
+        *output << fixed << setprecision(6) << x << " - y:";
+        *output << fixed << setprecision(6) << y << endl;
+        output->flush();
       }
     }
-
   }
 
   return 0;
-}
-
-void loadCircle(const Setting &points, Circle &out) {
-  int N = points.getLength();
-
-  for (int i = 0; i < N; ++i) {
-    Point2f pt(points[i][0], points[i][1]);
-    out.cnt.push_back(pt);
-    out.center += pt;
-  }
-  out.center.x /= N;
-  out.center.y /= N;
-
-  for (auto it = out.cnt.begin(); it != out.cnt.end();
-      ++it) {
-    out.r += sqrt(pow(it->x - out.center.x, 2) + pow(it->y - out.center.y, 2));
-  }
-
-  out.r /= N;
 }
 
