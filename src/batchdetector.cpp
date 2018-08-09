@@ -183,40 +183,41 @@ int main(int argc, char *argv[]) {
     Mat raw = imread(imgName, CV_LOAD_IMAGE_GRAYSCALE);
 
     // --- real detection proces starts here
-    shared_ptr<Target> target;
 
-    vector<shared_ptr<Target>> returnedValues = detector->detect(raw);
-    target = returnedValues[0];
+    vector<Target> returnedValues = detector->detect(raw);
+    for (auto targetIt = returnedValues.begin(); targetIt != returnedValues.end(); ++targetIt) {
+      Target &target = *targetIt;
 
-    if (target->detected) {
-      detector->evaluateExposure(raw, target);
-      detector->measureRough(raw, target);
-      detector->measure(raw, target);
-    }
+      if (target.detected) {
+        detector->evaluateExposure(raw, &target);
+        detector->measureRough(raw, &target);
+        detector->measure(raw, &target);
+      }
 
-    // --- and ends here
+      // --- and ends here
 
-    // --- where output is produced
+      // --- where output is produced
 
-    // TODO: introduce a flag to enable/disable this
+      // TODO: introduce a flag to enable/disable this
 
-    if (target->roughlyMeasured) {
+      if (target.roughlyMeasured) {
 
-      for (int j= 0; j < cfg.markerSignalModel.size() / 2; ++j) {
-        double x = target->codePoints[j].x, y = target->codePoints[j].y;
+        for (int j= 0; j < target.markerModel->signalModel.size() / 2; ++j) {
+          double x = target.codePoints[j].x, y = target.codePoints[j].y;
 
-        // convert to photogrammetry convention
-        // TODO: put an option
-        if (true) {
-          swap(x, y);
-          x = -(x - raw.rows / 2.0) * 4.7e-3; // MWE : C'est quoi ce truc ?
-          y = -(y - raw.cols / 2.0) * 4.7e-3;
+          // convert to photogrammetry convention
+          // TODO: put an option
+          if (true) {
+            swap(x, y);
+            x = -(x - raw.rows / 2.0) * 4.7e-3; // MWE : C'est quoi ce truc ?
+            y = -(y - raw.cols / 2.0) * 4.7e-3;
+          }
+
+          *output << filename.substr(0, filename.length() - 4) << " -> x:";
+          *output << fixed << setprecision(6) << x << " - y:";
+          *output << fixed << setprecision(6) << y << endl;
+          output->flush();
         }
-
-        *output << filename.substr(0, filename.length() - 4) << " -> x:";
-        *output << fixed << setprecision(6) << x << " - y:";
-        *output << fixed << setprecision(6) << y << endl;
-        output->flush();
       }
     }
   }

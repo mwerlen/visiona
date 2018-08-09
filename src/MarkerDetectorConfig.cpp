@@ -96,14 +96,13 @@ bool MarkerDetectorConfig::loadConfig(const std::string &file) {
     distortion.at<double>(3, 0) = camera["TD"][1];
     distortion.at<double>(4, 0) = camera["RD"][2];
 
-    Setting &target = root["target"];
+    Setting &targets = root["targets"];
 
-    target.lookupValue("d", markerDiameter);
-    target.lookupValue("id", markerInnerDiameter);
+    targets.lookupValue("d", markerDiameter);
+    targets.lookupValue("id", markerInnerDiameter);
 
-    fromSettingToVector(target["signal"], markerSignalModel);
-    target.lookupValue("signalRadiusPercentage", markerSignalRadiusPercentage);
-    target.lookupValue("signalStartsWith", markerSignalStartsWith);
+    fromSettingToMarkers(targets["targetModels"], markerModels);
+    targets.lookupValue("signalRadiusPercentage", markerSignalRadiusPercentage);
 
   } catch (SettingNotFoundException &e) {
     cerr << " * ERROR: \"" << e.getPath() << "\" not defined." << endl;

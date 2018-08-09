@@ -43,6 +43,14 @@
 
 namespace visiona {
 
+struct MarkerModel {
+    
+    int id;
+    float signalStartsWith;
+    std::vector<float> signalModel; // percentage of the flips
+
+};
+
 struct MarkerDetectorConfig {
 
     int CannyBlurKernelSize;
@@ -56,10 +64,9 @@ struct MarkerDetectorConfig {
 
     float markerSignalRadiusPercentage;
 
-    float markerSignalStartsWith;
-    std::vector<float> markerSignalModel; // percentage of the flips
-
     float markerxCorrThreshold;
+
+    std::vector<MarkerModel *> markerModels;
 
     cv::Mat K;
     cv::Mat distortion;
@@ -70,12 +77,21 @@ struct MarkerDetectorConfig {
 
   protected:
 
-    template <typename T>
-    void fromSettingToVector(libconfig::Setting &s, std::vector<T> &v) {
-      v.resize(s.getLength());
+    void fromSettingToMarkers(libconfig::Setting &s, std::vector<MarkerModel *> &markerModels) {
+      markerModels.resize(s.getLength());
 
       for (int i = 0; i < s.getLength(); i++) {
-        v[i] = s[i];
+        libconfig::Setting &m = s[i];
+        libconfig::Setting &signal = m["signal"];
+        
+        MarkerModel *markerModel = new MarkerModel();
+        m.lookupValue("id",markerModel->id);
+        m.lookupValue("signalStartsWith",markerModel->signalStartsWith);
+        markerModel->signalModel.resize(signal.getLength());
+        for (int j = 0; j < signal.getLength(); j++) {
+          markerModel->signalModel[j] = signal[j];
+        }
+        markerModels[i] = markerModel;
       }
     }
 };

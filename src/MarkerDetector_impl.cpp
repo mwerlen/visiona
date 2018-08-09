@@ -40,6 +40,7 @@
 #include "MarkerDetector_impl.h"
 
 #include <thread>
+#include <vector>
 
 #include <Eigen/Eigenvalues>
 
@@ -58,19 +59,20 @@ namespace visiona {
  */
 MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) : MarkerDetector(cfg) {
 
-  for (int cnt = 0; cnt < _cfg.markerSignalModel.size() / 2; ++cnt) {
-    int i = (_cfg.markerSignalStartsWith == 1.0 ? 0 : 1) + 2 * cnt;
+  MarkerModel* masterMarkerModel = cfg.markerModels[0];
+  for (int cnt = 0; cnt < masterMarkerModel->signalModel.size() / 2; ++cnt) {
+    int i = (masterMarkerModel->signalStartsWith == 1.0 ? 0 : 1) + 2 * cnt;
 
     float maxAngle, minAngle, angle;
 
     if (i == 0) {
       minAngle = 2 * M_PI
-          * (_cfg.markerSignalModel[_cfg.markerSignalModel.size() - 1] - 1);
+          * (masterMarkerModel->signalModel[masterMarkerModel->signalModel.size() - 1] - 1);
     } else {
-      minAngle = 2 * M_PI * _cfg.markerSignalModel[i - 1];
+      minAngle = 2 * M_PI * masterMarkerModel->signalModel[i - 1];
     }
 
-    maxAngle = 2 * M_PI * _cfg.markerSignalModel[i];
+    maxAngle = 2 * M_PI * masterMarkerModel->signalModel[i];
 
     angle = 0.5 * (maxAngle + minAngle);
 
@@ -95,7 +97,8 @@ MarkerDetector_impl::MarkerDetector_impl(const MarkerDetectorConfig &cfg) : Mark
  *   - Best matching circle (with respect to the reference signal) is selected and theta angle computed
  * Heading (angle between ref and signal), Inner and Outer circle are set.
  */
-bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading) {
+std::vector<Target> MarkerDetector_impl::detect(const cv::Mat &raw) {
+  std::vector<Target> targets; 
 
   Mat edges;
   detectEdges(raw, edges);
@@ -130,18 +133,25 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inne
     }
 
     int selectedCluster;
-    found = selectMarker(raw, circles, representatives, selectedCluster, heading);
+    MarkerModel* selectedMarkerModel;
+    float heading;
+    found = selectMarker(raw, circles, representatives, selectedCluster, selectedMarkerModel, heading);
 
     if (found) {
       // in which we have exactly two circles per cluster
       assert(clusters[selectedCluster].circleIds.size() == 2);
 
-      outer = circles[clusters[selectedCluster].circleIds[0]];
-      inner = circles[clusters[selectedCluster].circleIds[1]];
+      Target target;
+      target.detected = found;
+      target.outer = circles[clusters[selectedCluster].circleIds[0]];
+      target.inner = circles[clusters[selectedCluster].circleIds[1]];
+      target.heading = heading;
+      target.markerModel = selectedMarkerModel;
+      targets.push_back(target);
     }
   }
 
-  return found;
+  return targets;
 }
 
 /*
@@ -149,21 +159,21 @@ bool MarkerDetector_impl::detect(const cv::Mat &raw, Circle &outer, Circle &inne
  * to get target center and distance
  *
  */
-bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> tg) {
+bool MarkerDetector_impl::measure(const cv::Mat &image, Target * target) {
 
   // fit ellipses on the markers
   Ellipse outerElps, innerElps;
-  fitEllipse(tg->outer.cnt, outerElps);
-  fitEllipse(tg->inner.cnt, innerElps);
+  fitEllipse(target->outer.cnt, outerElps);
+  fitEllipse(target->inner.cnt, innerElps);
 
   // refine with subpixel
   vector<Point2f> outerElpsCntSubpx;
   vector<double> outerAngles;
-  refineEllipseCntWithSubpixelEdges(image, *tg, outerElps, true, 2, outerElpsCntSubpx, outerAngles);
+  refineEllipseCntWithSubpixelEdges(image, *target, outerElps, true, 2, outerElpsCntSubpx, outerAngles);
 
   vector<Point2f> innerElpsCntSubpx;
   vector<double> innerAngles;
-  refineEllipseCntWithSubpixelEdges(image, *tg, innerElps, true, 2, innerElpsCntSubpx, innerAngles);
+  refineEllipseCntWithSubpixelEdges(image, *target, innerElps, true, 2, innerElpsCntSubpx, innerAngles);
 
   // undistort ellipse points
   vector<Point2f> outerElpsCntSubpx_und;
@@ -187,14 +197,14 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> 
   getDistanceWithGradientDescent(outerPoly, innerPoly, outerElps.center, 1e-6, 1e-2, center, 1e-8, 0);
 
   // compute distance (MWE : disabled this part, not necessary)
-  // getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, tg->distance, tg->phi, tg->kappa);
+  // getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, target->distance, target->phi, target->kappa);
 
   // get the center in the distorted image
   center = distort(center);
-  tg->cx = center.x;
-  tg->cy = center.y;
+  target->cx = center.x;
+  target->cy = center.y;
 
-  tg->measured = true;
+  target->measured = true;
 
   return true;
 }
@@ -204,7 +214,7 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, std::shared_ptr<Target> 
  * Compute min (white) and max (black) color from circle
  *
  */
-void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white) {
+void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white, MarkerModel* markerModel) {
 
   Ellipse outerElps;
   fitEllipse(outer.cnt, outerElps);
@@ -234,10 +244,11 @@ void MarkerDetector_impl::evaluateExposure(const cv::Mat &raw, const Circle &out
   signal.clear();
 
   // TODO: check minimum and maximun angles, they are somewhat wrong
+  // MWE : C'est n'importe quoi..., il faut prendre en compte le signalStartWith
   vector<Point2f> pts;
   getSignalInsideEllipse(raw, outerElps, inScale, signal, inc,
-      heading + 2.0 * M_PI * _cfg.markerSignalModel[4] + safetyAngle,
-      heading + 2.0 * M_PI * _cfg.markerSignalModel[5] - safetyAngle, &pts);
+      heading + 2.0 * M_PI * markerModel->signalModel[4] + safetyAngle,
+      heading + 2.0 * M_PI * markerModel->signalModel[5] - safetyAngle, &pts);
 
   black = 0;
   for (const float &d : signal) {
@@ -374,7 +385,7 @@ void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCl
  * returned values are selectedCluster and theta pointers
  *
  */
-bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidates, const vector<int> &representativesIds, int &selectedCluster, float & theta) {
+bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidates, const vector<int> &representativesIds, int &selectedCluster, MarkerModel* &selectedMarkerModel, float & theta) {
 
   bool found = false;
 
@@ -390,33 +401,31 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
     getSignalInsideCircle(image, c, _cfg.markerSignalRadiusPercentage, signal);
 
     normalizeSignal(signal);
-    
-    //cout << "Signal : ";
-    //for (int i=0; i < signal.size(); i++) {
-    //  cout << signal[i] << ",";
-    //}
-    //cout << endl;
-    
-    Mat corr;
-    computeNormalizedxCorr(signal, corr);
-
-    double m, M;
-    Point2i mLoc, MLoc;
-
-    minMaxLoc(corr, &m, &M, &mLoc, &MLoc);
-
-    cout << "Max correlation:" << M << "(threshold: " << maxCorr << ")" << endl;
-
-    if (M > maxCorr) {
-      maxCorr = M;
-      // compute theta
-      theta = +M_PI - (float) MLoc.x / signal.size() * 2.0 * M_PI;
-
-      found = true;
-      selectedCluster = it;
+   
+    // MWE : ICI gérer les multi model
+    for (int i = 0; i < _cfg.markerModels.size(); i++) {
+      MarkerModel* markerModel = _cfg.markerModels[i];
+      Mat corr;
+      computeNormalizedxCorr(signal, corr, markerModel);
+  
+      double m, M;
+      Point2i mLoc, MLoc;
+  
+      minMaxLoc(corr, &m, &M, &mLoc, &MLoc);
+  
+      cout << "Max correlation:" << M << "(threshold: " << maxCorr << ")" << endl;
+  
+      if (M > maxCorr) {
+        maxCorr = M;
+        // compute theta
+        theta = +M_PI - (float) MLoc.x / signal.size() * 2.0 * M_PI;
+  
+        found = true;
+        selectedCluster = it;
+        selectedMarkerModel = markerModel;
+      }
     }
   }
-
   return found;
 }
 
@@ -461,19 +470,19 @@ void MarkerDetector_impl::normalizeSignal(std::vector<float>& sig_in) {
  * computeNormalizedxCorr compares reference signal with picture's target signal
  * Give back out matrice with diff between ref and signal.
  */
-void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_in, Mat &out) {
+void MarkerDetector_impl::computeNormalizedxCorr(const std::vector<float>& sig_in, Mat &out, MarkerModel* markerModel) {
 
   // prepare signals
   float raw[2 * sig_in.size()];
 
   for (unsigned int n = 0; n < 2; n++) {
     unsigned int segment = 0;
-    float val = _cfg.markerSignalStartsWith;
+    float val = markerModel->signalStartsWith;
 
     for (unsigned int k = 0; k < sig_in.size(); k++) {
-      if (segment < _cfg.markerSignalModel.size()) {
+      if (segment < markerModel->signalModel.size()) {
         // test if I have to advance
-        if (k > _cfg.markerSignalModel[segment] * sig_in.size()) {
+        if (k > markerModel->signalModel[segment] * sig_in.size()) {
           segment++;
           val = -val;
         }
@@ -919,12 +928,17 @@ void MarkerDetector_impl::subpixelEdgeWithLeastSquares(const cv::Mat &image, con
  * Refines a ellipse contours with subpixel edges
  *
  */
-void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image, const Target &tg, const Ellipse &elps, bool ignoreSignalAreas, 
+void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image, const Target &target, const Ellipse &elps, bool ignoreSignalAreas, 
                                                             int N, std::vector<cv::Point2f> &cnt, std::vector<double> &angles) {
 
   EllipsePoly elpsPoly;
   getEllipsePolynomialCoeff(elps, elpsPoly);
 
+  if (!target.markerModel->id) {
+    cout << "Detected target without model !";
+  }
+  MarkerModel* markerModel = target.markerModel;
+  
   // decide the angular increment, avoid to reuse information
   float elpsSize = (elps.size.width + elps.size.height) / 4.0;
   float inc = 1.0 / (elpsSize - N);
@@ -936,21 +950,21 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
   angles.reserve(ceil(2.0 * M_PI / inc));
 
   float theta = 0.0;
-  float val = _cfg.markerSignalStartsWith;
+  float val = markerModel->signalStartsWith;
   int segment = 0;
   float safetyAngle = 1 / elpsSize;
 
   while (theta < 2 * M_PI) {
     bool considerThisAngle = !ignoreSignalAreas;
 
-    if (segment < _cfg.markerSignalModel.size() && theta > 2 * M_PI * _cfg.markerSignalModel[segment]) {
+    if (segment < markerModel->signalModel.size() && theta > 2 * M_PI * markerModel->signalModel[segment]) {
       ++segment;
       val = -val;
     }
     if (val == -1.0) {
-      float minAngle = 2 * M_PI * _cfg.markerSignalModel[(segment - 1)  % _cfg.markerSignalModel.size()]  + safetyAngle;
-      float maxAngle = 2 * M_PI * _cfg.markerSignalModel[(segment) % _cfg.markerSignalModel.size()] - safetyAngle
-                       + (segment >= _cfg.markerSignalModel.size() ? 2 * M_PI : 0);
+      float minAngle = 2 * M_PI * markerModel->signalModel[(segment - 1)  % markerModel->signalModel.size()]  + safetyAngle;
+      float maxAngle = 2 * M_PI * markerModel->signalModel[(segment) % markerModel->signalModel.size()] - safetyAngle
+                       + (segment >= markerModel->signalModel.size() ? 2 * M_PI : 0);
 
       if (theta >= minAngle && theta <= maxAngle) {
         considerThisAngle = true;
@@ -961,11 +975,11 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
       Point2f edge;
 
       // disable exposure hint
-      subpixelEdgeWithLeastSquares(image, elps, elpsPoly, tg.heading + theta, -1, -1, edge, N);
+      subpixelEdgeWithLeastSquares(image, elps, elpsPoly, target.heading + theta, -1, -1, edge, N);
 
       if (!isnan(edge.x) && !isnan(edge.y)) {
         cnt.push_back(edge);
-        angles.push_back(tg.heading + theta);
+        angles.push_back(target.heading + theta);
       }
     }
 
@@ -977,14 +991,21 @@ void MarkerDetector_impl::refineEllipseCntWithSubpixelEdges(const cv::Mat &image
  *
  * MWE : le floodfill est-il vraiment utile ?
  */
-bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Target> tg) {
+bool MarkerDetector_impl::measureRough(const cv::Mat &image, Target * target) {
 
-  if (!tg->detected) {
+  if (!target->detected) {
     return false;
   }
 
+  if (!target->markerModel->id) {
+    cout << "Detected target without model !";
+    return false;
+  }
+  MarkerModel* markerModel = target->markerModel;
+
   bool pointsFound = true;
   bool success = true;
+
 
   // check and eventually allocate mask
   if (_floodfillMask.rows != image.rows + 2
@@ -993,41 +1014,40 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
   }
 
   // color the mask so floodfill cannot surpass the outer circle
-  for (auto it = tg->outer.cnt.begin(); it != tg->outer.cnt.end(); ++it) {
+  for (auto it = target->outer.cnt.begin(); it != target->outer.cnt.end(); ++it) {
     _floodfillMask.at<unsigned char>(it->y + 1, it->x + 1) = 255;
   }
 
   // generate or validate seedpoints
   const unsigned int NPTS = _worldPoints.size();
 
-  if (tg->seedPoints.empty()) {
+  if (target->seedPoints.empty()) {
     // get the seed points for the floodfill and the true world points
     Ellipse outerElps;
-    fitEllipse(tg->outer.cnt, outerElps);
+    fitEllipse(target->outer.cnt, outerElps);
 
-    for (int cnt = 0; cnt < _cfg.markerSignalModel.size() / 2; ++cnt) {
-      int i = (_cfg.markerSignalStartsWith == 1.0 ? 0 : 1) + 2 * cnt;
+    for (int cnt = 0; cnt < markerModel->signalModel.size() / 2; ++cnt) {
+      int i = (markerModel->signalStartsWith == 1.0 ? 0 : 1) + 2 * cnt;
 
       float maxAngle, minAngle, angle;
 
       if (i == 0) {
-        minAngle = 2 * M_PI
-            * (_cfg.markerSignalModel[_cfg.markerSignalModel.size() - 1] - 1);
+        minAngle = 2 * M_PI * (markerModel->signalModel[markerModel->signalModel.size() - 1] - 1);
       } else {
-        minAngle = 2 * M_PI * _cfg.markerSignalModel[i - 1];
+        minAngle = 2 * M_PI * markerModel->signalModel[i - 1];
       }
 
-      maxAngle = 2 * M_PI * _cfg.markerSignalModel[i];
+      maxAngle = 2 * M_PI * markerModel->signalModel[i];
       angle = 0.5 * (maxAngle + minAngle);
 
-      tg->seedPoints.push_back(
-          evalEllipse(angle + tg->heading, outerElps.center,
+      target->seedPoints.push_back(
+          evalEllipse(angle + target->heading, outerElps.center,
               outerElps.size.width / 2.0 * _cfg.markerSignalRadiusPercentage,
               outerElps.size.height / 2.0 * _cfg.markerSignalRadiusPercentage,
               outerElps.angle * M_PI / 180.0));
     }
   } else {
-    if (tg->seedPoints.size() != NPTS) {
+    if (target->seedPoints.size() != NPTS) {
       cerr << "ERROR: not enough or too much seedpoints provided" << endl;
       assert(false);
     }
@@ -1038,8 +1058,8 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
   int times = floor(253 / NPTS);
 
   for (int i = 0; i < NPTS; ++i) {
-    floodFill(image, _floodfillMask, tg->seedPoints[i], 255, &(bounds[i]),
-        (tg->white - tg->black) * 0.4,
+    floodFill(image, _floodfillMask, target->seedPoints[i], 255, &(bounds[i]),
+        (target->white - target->black) * 0.4,
         255,
         4 | ((2 + i * times) << 8) | CV_FLOODFILL_FIXED_RANGE
             | CV_FLOODFILL_MASK_ONLY);
@@ -1048,7 +1068,7 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
   unsigned int cnt[NPTS];
   for (unsigned int i = 0; i < NPTS; ++i) {
     cnt[i] = 0;
-    tg->codePoints.push_back(Point2f(0.0, 0.0));
+    target->codePoints.push_back(Point2f(0.0, 0.0));
   }
 
   // compute centroids employing the bounds regions
@@ -1070,8 +1090,8 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
             // weighted average
             cnt[i] += image.at<unsigned char>(y, x);
 
-            tg->codePoints[i].x += image.at<unsigned char>(y, x) * x;
-            tg->codePoints[i].y += image.at<unsigned char>(y, x) * y;
+            target->codePoints[i].x += image.at<unsigned char>(y, x) * x;
+            target->codePoints[i].y += image.at<unsigned char>(y, x) * y;
           }
         }
       }
@@ -1079,7 +1099,7 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
   }
 
   // un-color the mask so floodfill cannot surpass the outer circle
-  for (auto it = tg->outer.cnt.begin(); it != tg->outer.cnt.end(); ++it) {
+  for (auto it = target->outer.cnt.begin(); it != target->outer.cnt.end(); ++it) {
     _floodfillMask.at<unsigned char>(it->y + 1, it->x + 1) = 0;
   }
   //*/
@@ -1088,36 +1108,36 @@ bool MarkerDetector_impl::measureRough(const cv::Mat &image, std::shared_ptr<Tar
 
   if (pointsFound) {
     for (unsigned int i = 0; i < NPTS; ++i) {
-      tg->codePoints[i].x /= cnt[i];
-      tg->codePoints[i].y /= cnt[i];
+      target->codePoints[i].x /= cnt[i];
+      target->codePoints[i].y /= cnt[i];
     }
 
     // solve the PnP problem
     Mat rod;
-    solvePnP(_worldPoints, tg->codePoints, _cfg.K, _cfg.distortion, rod, tg->rought);
-    Rodrigues(rod, tg->roughR);
+    solvePnP(_worldPoints, target->codePoints, _cfg.K, _cfg.distortion, rod, target->rought);
+    Rodrigues(rod, target->roughR);
 
     // reproject points and compute error
-    projectPoints(_worldPoints, rod, tg->rought, _cfg.K, _cfg.distortion, prj_points);
-    tg->meanReprojectionError = 0;
+    projectPoints(_worldPoints, rod, target->rought, _cfg.K, _cfg.distortion, prj_points);
+    target->meanReprojectionError = 0;
 
     for (unsigned int i = 0; i < NPTS; i++) {
-      float err = sqrt(pow(prj_points[i].x - tg->codePoints[i].x, 2) + pow(prj_points[i].y - tg->codePoints[i].y, 2));
+      float err = sqrt(pow(prj_points[i].x - target->codePoints[i].x, 2) + pow(prj_points[i].y - target->codePoints[i].y, 2));
 
       if (err > 5) {
         cerr << "WARNING, high reprojection error " << i << "-th code point: "  << err << endl;
         success = false;
       }
-      tg->meanReprojectionError += err;
+      target->meanReprojectionError += err;
     }
 
-    tg->meanReprojectionError /= NPTS;
+    target->meanReprojectionError /= NPTS;
   } else {
     success = false;
   }
 
   if (success) {
-    tg->roughlyMeasured = true;
+    target->roughlyMeasured = true;
   }
 
   return success;

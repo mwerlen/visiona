@@ -68,29 +68,18 @@ class MarkerDetector_impl: public MarkerDetector {
 
     MarkerDetector_impl(const MarkerDetectorConfig &cfg);
 
-    // TODO: remove this wrapper method
-    inline std::vector<std::shared_ptr<Target>> detect(const cv::Mat &raw) {
-      std::shared_ptr<Target> tg(new Target);
-      std::vector<std::shared_ptr<Target>> ret;
-      ret.push_back(tg);
+    std::vector<Target> detect(const cv::Mat &raw);
 
-      tg->detected = detect(raw, tg->outer, tg->inner, tg->heading);
+    bool measure(const cv::Mat &image, Target * target);
 
-      return ret;
-    }
-
-    bool detect(const cv::Mat &raw, Circle &outer, Circle &inner, float &heading);
-
-    bool measure(const cv::Mat &image, std::shared_ptr<Target> tg);
-
-    inline bool measureRough(const cv::Mat &image, std::shared_ptr<Target> tg);
+    inline bool measureRough(const cv::Mat &image, Target * tg);
 
     // TODO: remove this wrapper method
-    void evaluateExposure(const cv::Mat &image, std::shared_ptr<Target> tg) {
-      evaluateExposure(image, tg->outer, tg->heading, tg->black, tg->white);
+    void evaluateExposure(const cv::Mat &image, Target * target) {
+      evaluateExposure(image, target->outer, target->heading, target->black, target->white, target->markerModel);
     }
 
-    void evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white);
+    void evaluateExposure(const cv::Mat &raw, const Circle &outer, float heading, float &black, float &white, MarkerModel* markerModel);
 
     void detectEdges(const cv::Mat &raw, cv::Mat &edges);
 
@@ -100,7 +89,7 @@ class MarkerDetector_impl: public MarkerDetector {
 
     void clusterCircles(const Circles &in, std::vector<CircleCluster> &out);
 
-    bool selectMarker(const cv::Mat &image, const Circles &in, const std::vector<int> &ids, int &mId, float &theta);
+    bool selectMarker(const cv::Mat &image, const Circles &in, const std::vector<int> &ids, int &mId, MarkerModel* &selectedMarkerModel, float &theta);
 
     void fitEllipse(const Contour &cnt, Ellipse &e);
 
@@ -131,7 +120,7 @@ class MarkerDetector_impl: public MarkerDetector {
 
     void normalizeSignal(std::vector<float> &signal);
 
-    void computeNormalizedxCorr(const std::vector<float> &signal, cv::Mat &out);
+    void computeNormalizedxCorr(const std::vector<float> &signal, cv::Mat &out, visiona::MarkerModel* markerModel);
 
     cv::Point2f evalEllipse(float at, const cv::Point2f &c, float a, float b, float phi);
 
