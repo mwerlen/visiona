@@ -27,6 +27,7 @@
  **   along with visiona.  If not, see <http://www.gnu.org/licenses/>.
  **
  *******************************************************************************/
+/* vim: set sw=2: */ 
 
 /*
  * batchdetector.cpp

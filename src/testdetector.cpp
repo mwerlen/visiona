@@ -1,3 +1,4 @@
+/* vim: set sw=2: */
 /*
  * simpledetector.cpp
  *
@@ -29,7 +30,7 @@ int main(int argc, char *argv[]) {
 
   // config
   MarkerDetectorConfig config;
-  config.loadConfig("../config/cible_01.cfg");
+  config.loadConfig("../config/complete.cfg");
 
   cout << "Config loaded !" << endl;
 
@@ -70,50 +71,50 @@ int main(int argc, char *argv[]) {
     cout << "Image read" << endl;
 
     // --- real detection proces starts here
-    shared_ptr<Target> target;
+    vector<Target> returnedValues = markerDetector->detect(raw);
+    for (auto targetIt = returnedValues.begin(); targetIt != returnedValues.end(); ++targetIt) {
+      Target &target = *targetIt;
   
-    vector<shared_ptr<Target>> returnedValue = markerDetector->detect(raw);
-    target = returnedValue[0];
-  
-    cout << "Marker detected: " << target->detected << endl;
+      cout << "Marker detected: " << target.detected << endl;
 
-    if (target->detected) {
-      markerDetector->evaluateExposure(raw, target);
-      cout << "Exposure computed" << endl;
-      cout << " - black: " << target->black << endl;
-      cout << " - white: " << target-> white << endl;
+      if (target.detected) {
+        markerDetector->evaluateExposure(raw, &target);
+        cout << "Exposure computed" << endl;
+        cout << " - black: " << target.black << endl;
+        cout << " - white: " << target.white << endl;
 
-      markerDetector->measureRough(raw, target);
-      cout << "Target (center roughly):" << endl;
-      cout << " - x:" << fixed << setprecision(6) << target->outer.center.x << endl;
-      cout << " - y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
+        markerDetector->measureRough(raw, &target);
+        cout << "Target (center roughly):" << endl;
+        cout << " - x:" << fixed << setprecision(6) << target.outer.center.x << endl;
+        cout << " - y: "  << fixed << setprecision(6) << target.outer.center.y << endl;
 
-      markerDetector->measure(raw, target);
-      cout << "Target (center):" << endl;
-      cout << " - x:" << fixed << setprecision(6) << target->outer.center.x << endl;
-      cout << " - y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
-    }
+        markerDetector->measure(raw, &target);
+        cout << "Target (center):" << endl;
+        cout << " - x:" << fixed << setprecision(6) << target.outer.center.x << endl;
+        cout << " - y: "  << fixed << setprecision(6) << target.outer.center.y << endl;
+      }
 
-    // --- where output is produced
+      // --- where output is produced
 
 
-    if (target->roughlyMeasured) {
+      if (target.roughlyMeasured) {
 
-      cout << "Code points:" << endl;
+        cout << "Code points:" << endl;
 
-      for (int i = 0; i < config.markerSignalModel.size() / 2; ++i) {
-        double x = target->codePoints[i].x, y = target->codePoints[i].y;
+        for (int i = 0; i < target.markerModel->signalModel.size() / 2; ++i) {
+          double x = target.codePoints[i].x, y = target.codePoints[i].y;
 
-        // convert to photogrammetry convention
-        // TODO: put an option
-        if (true) {
-          swap(x, y);
-          x = -(x - raw.rows / 2.0) * 4.7e-3;
-          y = -(y - raw.cols / 2.0) * 4.7e-3;
+          // convert to photogrammetry convention
+          // TODO: put an option
+          if (true) {
+            swap(x, y);
+            x = -(x - raw.rows / 2.0) * 4.7e-3;
+            y = -(y - raw.cols / 2.0) * 4.7e-3;
+          }
+
+          cout << "-> x:" << fixed << setprecision(6) << x << " ";
+          cout << " - y: " << fixed << setprecision(6) << y << endl;
         }
-
-        cout << "-> x:" << fixed << setprecision(6) << x << " ";
-        cout << " - y: " << fixed << setprecision(6) << y << endl;
       }
     }
   }

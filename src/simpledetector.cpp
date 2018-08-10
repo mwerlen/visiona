@@ -37,34 +37,33 @@ int main(int argc, char *argv[]) {
   Mat raw = imread("../target/target2.png", CV_LOAD_IMAGE_GRAYSCALE);
 
   // --- real detection proces starts here
-  shared_ptr<Target> target;
 
-  vector<shared_ptr<Target>> returnedValue = markerDetector->detect(raw);
-  target = returnedValue[0];
+  vector<Target> returnedValue = markerDetector->detect(raw);
+  Target target = Target(returnedValue[0]);
 
-  if (target->detected) {
-    markerDetector->evaluateExposure(raw, target);
-    markerDetector->measureRough(raw, target);
+  if (target.detected) {
+    markerDetector->evaluateExposure(raw, &target);
+    markerDetector->measureRough(raw, &target);
     cout << "Target (roughly):" << endl;
-    cout << "center x:" << fixed << setprecision(6) << target->outer.center.x << " ";
-    cout << "- y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
+    cout << "center x:" << fixed << setprecision(6) << target.outer.center.x << " ";
+    cout << "- y: "  << fixed << setprecision(6) << target.outer.center.y << endl;
 
-    markerDetector->measure(raw, target);
+    markerDetector->measure(raw, &target);
     cout << "Target:" << endl;
-    cout << "center x:" << fixed << setprecision(6) << target->outer.center.x << " ";
-    cout << "- y: "  << fixed << setprecision(6) << target->outer.center.y << endl;
+    cout << "center x:" << fixed << setprecision(6) << target.outer.center.x << " ";
+    cout << "- y: "  << fixed << setprecision(6) << target.outer.center.y << endl;
 
   }
 
   // --- where output is produced
 
 
-  if (target->roughlyMeasured) {
+  if (target.roughlyMeasured) {
 
     cout << "Code points:" << endl;
 
-    for (int i = 0; i < config.markerSignalModel.size() / 2; ++i) {
-      double x = target->codePoints[i].x, y = target->codePoints[i].y;
+    for (int i = 0; i < target.markerModel->signalModel.size() / 2; ++i) {
+      double x = target.codePoints[i].x, y = target.codePoints[i].y;
 
       // convert to photogrammetry convention
       // TODO: put an option
