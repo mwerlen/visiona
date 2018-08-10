@@ -8,7 +8,7 @@ import LaTeX_printer
 
 log = logging.getLogger("generator")
 log.addHandler(logging.StreamHandler())
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 def generate_sequences(length):
     log.debug("Niveau : " + str(length))
@@ -51,4 +51,5 @@ if __name__ == "__main__":
     for target in targets:
         log.debug(target)
         # LaTeX_printer.latex_print(target)
-        log.info(target.getSignal())
+        log.debug(target.getSignal())
+    print(",\n".join(map(Target.getConfig, targets)))

@@ -169,7 +169,8 @@ int main(int argc, char *argv[]) {
   closedir(dir);
 
   // --------------------- prepare output files --------------------------------
-  ofstream *output = new ofstream("output.log");
+  ofstream *output = new ofstream("output.csv");
+  *output << "file;target_id;x;y" << endl;
 
   cout << images.size() << " file(s) found." << endl;
 
@@ -197,28 +198,12 @@ int main(int argc, char *argv[]) {
 
       // --- and ends here
 
-      // --- where output is produced
-
-      // TODO: introduce a flag to enable/disable this
-
       if (target.roughlyMeasured) {
-
-        for (int j= 0; j < target.markerModel->signalModel.size() / 2; ++j) {
-          double x = target.codePoints[j].x, y = target.codePoints[j].y;
-
-          // convert to photogrammetry convention
-          // TODO: put an option
-          if (true) {
-            swap(x, y);
-            x = -(x - raw.rows / 2.0) * 4.7e-3; // MWE : C'est quoi ce truc ?
-            y = -(y - raw.cols / 2.0) * 4.7e-3;
-          }
-
-          *output << filename.substr(0, filename.length() - 4) << " -> x:";
-          *output << fixed << setprecision(6) << x << " - y:";
-          *output << fixed << setprecision(6) << y << endl;
-          output->flush();
-        }
+        *output << filename.substr(0, filename.length() - 4) << ";";
+        *output << target.markerModel->id << ";";
+        *output << fixed << setprecision(6) << target.cx << ";";
+        *output << fixed << setprecision(6) << target.cy << endl;
+        output->flush();
       }
     }
   }
