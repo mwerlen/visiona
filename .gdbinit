@@ -2,4 +2,4 @@ file build/batchdetector
 directory ./src
 directory ./include
 directory .
-set args --path="./samples_png" --ext="png" --debug --prefix="cible" --config="./config/complete.cfg"
+set args --path="./samples_jpg" --ext="jpg" --debug --prefix="cible" --config="./config/complete.cfg"
