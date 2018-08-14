@@ -197,12 +197,15 @@ bool MarkerDetector_impl::measure(const cv::Mat &image, Target * target) {
   getDistanceWithGradientDescent(outerPoly, innerPoly, outerElps.center, 1e-6, 1e-2, center, 1e-8, 0);
 
   // compute distance (MWE : disabled this part, not necessary)
-  // getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, target->distance, target->phi, target->kappa);
+  getPoseGivenCenter(outerPoly, center, _cfg.markerDiameter / 2.0, target->distance, target->phi, target->kappa);
 
   // get the center in the distorted image
   center = distort(center);
   target->cx = center.x;
   target->cy = center.y;
+
+  //target->cx = outerElps.center.x;
+  //target->cy = outerElps.center.y;
 
   target->measured = true;
 
@@ -348,9 +351,9 @@ void MarkerDetector_impl::clusterCircles(const Circles &in, std::vector<CircleCl
   float radiusRatio = _cfg.markerInnerDiameter / _cfg.markerDiameter;
 
   for (int i = 0; i < in.size(); ++i) {
-    cout << "Clustering circle #" << i << endl;
-    cout << " - center x: " << in[i].center.x << " - y: " << in[i].center.y << endl;
-    cout << " - radius: " << in[i].r << endl;
+    //cout << "Clustering circle #" << i << endl;
+    //cout << " - center x: " << in[i].center.x << " - y: " << in[i].center.y << endl;
+    //cout << " - radius: " << in[i].r << endl;
 
     int bestMatch = -1;
     float bestDiff = numeric_limits<float>::infinity();
@@ -389,10 +392,10 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
 
   bool found = false;
 
-  float maxCorr = _cfg.markerxCorrThreshold;
 
   for (auto it = 0; it < representativesIds.size(); ++it) {
-
+    
+    float maxCorr = _cfg.markerxCorrThreshold;
     const Circle &c = candidates[representativesIds[it]];
     
     cout << "Circle #" << representativesIds[it] << endl;
@@ -413,7 +416,7 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
   
       minMaxLoc(corr, &m, &M, &mLoc, &MLoc);
   
-      cout << "Max correlation:" << M << "(threshold: " << maxCorr << ")" << endl;
+      //cout << "Max correlation:" << M << "(threshold: " << maxCorr << ")" << endl;
   
       if (M > maxCorr) {
         maxCorr = M;
@@ -425,6 +428,7 @@ bool MarkerDetector_impl::selectMarker(const Mat& image, const Circles &candidat
         selectedMarkerModel = markerModel;
       }
     }
+    cout << "TargetModel: " << selectedMarkerModel->id << " - correlation:" << maxCorr << "(threshold: " << _cfg.markerxCorrThreshold << ")" << endl;
   }
   return found;
 }

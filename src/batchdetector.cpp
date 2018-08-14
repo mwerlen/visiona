@@ -178,6 +178,7 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < images.size(); i++) {
     string filename = images[i];
 
+    cout << "----------------------------------------------------------" << endl;
     cout << filename << " ..." << endl;
 
     string imgName = imagePath + string("/") + filename;
@@ -198,12 +199,20 @@ int main(int argc, char *argv[]) {
 
       // --- and ends here
 
-      if (target.roughlyMeasured) {
+      if (target.measured) {
         *output << filename.substr(0, filename.length() - 4) << ";";
         *output << target.markerModel->id << ";";
         *output << fixed << setprecision(6) << target.cx << ";";
         *output << fixed << setprecision(6) << target.cy << endl;
         output->flush();
+
+        cout << "Detected target " << target.markerModel->id << " at ";
+        cout << fixed << setprecision(6) << target.cx << ";";
+        cout << fixed << setprecision(6) << target.cy << " - ";
+        cout << fixed << setprecision(6) << target.outer.center.x << ";";
+        cout << fixed << setprecision(6) << target.outer.center.y << endl;
+      } else {
+        cout << "Unable to measure :(" << endl;
       }
     }
   }
